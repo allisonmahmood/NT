@@ -1,0 +1,4 @@
+# scratch / editor cruft
+.DS_Store
+*.log
+.tmp/
