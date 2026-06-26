@@ -73,6 +73,7 @@ _nt_all_branches() {
 # nt <branch> [base]   create/switch to a worktree and cd into it
 # nt cd  [branch]      cd to an existing worktree (fzf picker if branch omitted)
 # nt rm  [-f] [branch] remove a worktree (fzf picker if branch omitted)
+# nt home              cd back to the main checkout
 # nt ls                list this repo's worktrees   (nt -h for help)
 #
 # Worktrees live next to the main checkout in <repo>.worktrees/<branch>.
@@ -102,13 +103,18 @@ nt() {
       print "  nt <branch> [base]    create/switch to a worktree (new branch from latest origin/main)"
       print "  nt cd  [branch]       cd to a worktree (fzf picker if branch omitted)"
       print "  nt rm  [-f] [branch]  remove a worktree (fzf picker if branch omitted)"
+      print "  nt home               cd back to the main checkout"
       print "  nt ls                 list this repo's worktrees"
       return 0
       ;;
     "")
-      print "nt <branch> | nt cd [branch] | nt rm [branch] | nt ls   (nt -h for help)"
+      print "nt <branch> | nt cd [branch] | nt rm [branch] | nt home | nt ls   (nt -h for help)"
       git worktree list
       return 0
+      ;;
+    home)
+      cd "$main_dir" && print "nt: → $main_dir  (main checkout)"
+      return
       ;;
     ls|list)
       git worktree list

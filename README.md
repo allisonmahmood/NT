@@ -33,6 +33,7 @@ compinit has already run — as it has under oh-my-zsh).
 | `nt <branch> [base]` | create/switch to a worktree and `cd` in |
 | `nt cd [branch]` | `cd` to an existing worktree (fzf picker if no branch) |
 | `nt rm [-f] [target]` | remove a worktree (fzf picker if no target) |
+| `nt home` | `cd` back to the main checkout (the repo the worktrees hang off) |
 | `nt ls` | list this repo's worktrees |
 | `nt` / `nt -h` | list + hint / full usage |
 
@@ -46,7 +47,7 @@ The argument to the create form is *the branch you want to be on*:
 
 ### Tab completion
 
-- `nt <tab>` → subcommands (`cd`/`rm`/`ls`) plus existing branch names
+- `nt <tab>` → subcommands (`cd`/`rm`/`home`/`ls`) plus existing branch names
 - `nt cd <tab>` → branches that currently have a worktree
 - `nt rm <tab>` → every worktree except the main checkout, and `-f`. Branch-backed
   worktrees show by branch name; branch-less (detached) worktrees — e.g. ones

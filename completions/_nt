@@ -9,6 +9,7 @@ local -a subcmds
 subcmds=(
   'cd:cd to an existing worktree'
   'rm:remove a worktree'
+  'home:cd back to the main checkout'
   'ls:list this repo'\''s worktrees'
 )
 
@@ -34,7 +35,7 @@ case "${words[2]}" in
     _describe -t flags 'flag' flags
     (( ${#wt} )) && _describe -t worktrees 'worktree' wt
     ;;
-  ls|list)
+  ls|list|home)
     ;;
   *)
     # nt <branch> <base>: complete the base argument with any branch.

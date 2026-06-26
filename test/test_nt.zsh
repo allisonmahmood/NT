@@ -59,6 +59,12 @@ cd "$TMP/example-repo"; nt cd fix-login
 check "cd by name" "$PWD" "$TMP/example-repo.worktrees/fix-login"
 cd "$TMP/example-repo"; nt cd does-not-exist; check "cd unknown -> nonzero" "$?" "1"
 
+print "\n=== nt home -> back to the main checkout ==="
+cd "$TMP/example-repo.worktrees/fix-login"; nt home
+check "home from a worktree -> main checkout" "$PWD" "$TMP/example-repo"
+nt home; check "home while already home -> stays put, returns 0" "$PWD" "$TMP/example-repo"
+contains "-h lists home" "$(cd "$TMP/example-repo"; nt -h)" "nt home"
+
 print "\n=== nt rm <branch> ==="
 cd "$TMP/example-repo"; nt rm sibling-test >/dev/null
 contains "rm removed it from list" "$(git worktree list)" "fix-login"  # sanity: list still works
