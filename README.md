@@ -43,8 +43,10 @@ already run — as it has under oh-my-zsh). One line. Done.
 | `nt <branch> [base]` | spin up / jump to a worktree and `cd` in |
 | `nt cd [branch]` | `cd` to an existing worktree (fzf picker if no branch) |
 | `nt rm [-f] [target]` | nuke a worktree (fzf picker if no target) |
+| `nt done [-f] [target]` | nuke a worktree **and** delete its local branch |
+| `nt prune` | tidy up: drop stale worktrees + empty dirs, offer to delete gone branches |
 | `nt home` | `cd` back to the main checkout, wherever you are |
-| `nt ls` | list this repo's worktrees |
+| `nt ls` | list this repo's worktrees, with dirty + ahead/behind |
 | `nt` / `nt -h` | list + hint / full usage |
 
 ### Point it at a branch
@@ -62,13 +64,51 @@ local copy:
 - **already has a worktree** → skips the theatrics and `cd`s you there
 - `nt <name> <base>` → fork the new branch off an explicit base instead
 
+(The `-h` text says exactly where new branches fork from — `latest origin/main`,
+or your actual remote/default, or `main (no remote)` — so it never lies to you.)
+
+### Housekeeping
+
+When you're done with a branch, or the worktree dir has filled up with stuff
+you've long since merged:
+
+- **`nt done [target]`** → remove the worktree **and** delete its local branch in
+  one move. Safe by default (`git branch -d` refuses an unmerged branch and keeps
+  it, telling you so); `nt done -f` forces both the removal and the delete. No
+  target → fzf picker. Detached worktree? It just removes it (no branch to delete).
+- **`nt prune`** → `git worktree prune` to clear stale entries, sweep up the empty
+  `team/`-style parent dirs git leaves behind, then — if any local branches have a
+  **gone upstream** (merged & deleted on origin) — pop an fzf picker to clean them:
+  **enter** on the `[ALL]` row deletes them all, or **space** to mark just the ones
+  you want. Run `git fetch -p` first so "gone" is accurate. In a non-interactive
+  shell it only *lists* the gone branches — it never deletes without you there.
+
+### A nicer `nt ls`
+
+`nt ls` (and bare `nt`) show a dirty marker and ahead/behind vs upstream:
+
+```
+  main             =      ~/Developer/acme   (main)
+* fix-login        ↑2     ~/Developer/acme.worktrees/fix-login
+  team/issue-123   ↓1     ~/Developer/acme.worktrees/team/issue-123
+
+* = uncommitted changes
+```
+
+(The main checkout always lists first, and the branch column shows the full
+short name — `team/issue-123`, not just the leaf.)
+
+`*` = uncommitted changes, `↑n`/`↓n` = ahead/behind the upstream, `=` = in sync,
+`-` = no upstream, `?` = the dir is gone (a `nt prune` candidate). In a non-UTF-8
+locale the arrows degrade to `^n`/`vn` so the columns still line up.
+
 ### Tab completion
 
-- `nt <tab>` → subcommands (`cd` / `rm` / `home` / `ls`) plus existing branch names
+- `nt <tab>` → subcommands (`cd` / `rm` / `done` / `prune` / `home` / `ls`) plus existing branch names
 - `nt cd <tab>` → branches that currently have a worktree
-- `nt rm <tab>` → every worktree except the main checkout, plus `-f`. Branch-backed
-  worktrees show by branch name; branch-less (detached) ones — say, created by some
-  other tool — show by full path so they're still reachable.
+- `nt rm <tab>` / `nt done <tab>` → every worktree except the main checkout, plus `-f`.
+  Branch-backed worktrees show by branch name; branch-less (detached) ones — say,
+  created by some other tool — show by full path so they're still reachable.
 - `nt <branch> <tab>` → branches, to pick a base
 
 ## Notes & knobs
@@ -78,11 +118,15 @@ local copy:
 - `NT_NO_FETCH=1 nt foo` skips the network fetch (offline, or just impatient).
 - A local branch is only ever fast-forwarded to origin when it's a clean FF —
   your diverged local commits are never touched.
-- `nt rm <target>` takes a branch name, a full worktree path, or a unique path
-  tail (the last path component, usually). An ambiguous tail is refused, with the
-  matches listed. No target → fzf picker over every worktree but the main checkout.
-  Either way it flat-out refuses to remove the main checkout, and if you `rm` the
-  worktree you're standing in, it steps you back home first.
+- `nt rm <target>` (and `nt done <target>`) take a branch name, a full worktree
+  path, or a unique path tail (the last path component, usually). An ambiguous tail
+  is refused, with the matches listed. No target → fzf picker over every worktree
+  but the main checkout. Either way it flat-out refuses to remove the main checkout,
+  and if you `rm`/`done` the worktree you're standing in, it steps you back home first.
+- The interactive pickers (`nt cd`/`nt rm`/`nt done` with no argument, and the
+  `nt prune` branch cleanup) need [`fzf`](https://github.com/junegunn/fzf). Without
+  it you get a one-line "fzf required …" nudge instead of a cryptic error — just
+  pass an explicit branch/target and everything else works fzf-free.
 - Worktree location is one line in `nt.plugin.zsh` — change it if you hate it:
   `root="${main_dir:h}/${repo_name}.worktrees"`.
 

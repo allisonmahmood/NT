@@ -9,6 +9,8 @@ local -a subcmds
 subcmds=(
   'cd:cd to an existing worktree'
   'rm:remove a worktree'
+  'done:remove a worktree and delete its branch'
+  'prune:prune stale worktrees, empty dirs, gone branches'
   'home:cd back to the main checkout'
   'ls:list this repo'\''s worktrees'
 )
@@ -28,14 +30,14 @@ case "${words[2]}" in
     wt=(${(f)"$(_nt_wt_branches)"}); wt=(${wt:#})
     (( ${#wt} )) && _describe -t worktrees 'worktree' wt
     ;;
-  rm|remove)
+  rm|remove|done|finish)
     local -a wt flags
     wt=(${(f)"$(_nt_wt_targets)"}); wt=(${wt:#})
-    flags=('-f:force removal (uncommitted changes)')
+    flags=('-f:force (uncommitted changes / unmerged branch)')
     _describe -t flags 'flag' flags
     (( ${#wt} )) && _describe -t worktrees 'worktree' wt
     ;;
-  ls|list|home)
+  ls|list|home|prune|clean)
     ;;
   *)
     # nt <branch> <base>: complete the base argument with any branch.

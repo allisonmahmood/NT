@@ -54,6 +54,15 @@ contains "branch-backed fix-login by name" "$targets" "fix-login"
 contains "detached worktree by path"       "$targets" "$detpath"
 check    "main checkout excluded"          "$(_nt_wt_targets | awk '$0=="main"')" ""
 
+print "\n=== _nt routes the new subcommands (catches a mistyped case arm) ==="
+# `zsh -n` proves the file parses but not that the routing arms exist/are spelled
+# right; grep the source for the subcmd entries and case labels as a cheap proxy.
+nt_src="$(<"$REPO/completions/_nt")"
+contains "subcmd entry: done"      "$nt_src" "done:"
+contains "subcmd entry: prune"     "$nt_src" "prune:"
+contains "case arm: done|finish"   "$nt_src" "done|finish"
+contains "case arm: prune|clean"   "$nt_src" "prune|clean"
+
 print "\n=== completion files parse cleanly ==="
 zsh -n "$REPO/nt.plugin.zsh"   && { print "  PASS: nt.plugin.zsh"; ((pass++)); } || { print "  FAIL: nt.plugin.zsh"; ((fail++)); }
 zsh -n "$REPO/completions/_nt" && { print "  PASS: _nt"; ((pass++)); }           || { print "  FAIL: _nt"; ((fail++)); }
