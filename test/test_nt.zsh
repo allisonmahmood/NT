@@ -104,6 +104,122 @@ nt rm leaf 2>/dev/null; check "ambiguous leaf -> nonzero" "$?" "1"
   && { print "  PASS: both ambiguous worktrees intact"; ((pass++)); } \
   || { print "  FAIL: an ambiguous worktree was removed"; ((fail++)); }
 
+print "\n=== nt ls: dirty marker + legend + in-sync ==="
+# LC_ALL=C.UTF-8 pins the up/down glyphs to arrows so the assertions are locale-independent.
+cd "$TMP/example-repo"; NT_NO_FETCH=1 nt ls-dirty >/dev/null
+print scratch >> dirty.txt                       # make ls-dirty worktree dirty
+cd "$TMP/example-repo"; lsout="$(LC_ALL=C.UTF-8 nt ls)"
+contains "ls shows the branch"        "$lsout" "ls-dirty"
+contains "ls marks dirty with *"      "$lsout" "* ls-dirty"
+contains "ls tags the main checkout"  "$lsout" "(main)"
+contains "ls prints the legend"       "$lsout" "uncommitted changes"
+contains "ls renders in-sync ="       "$lsout" "= "
+contains "ls shows no-upstream as -"  "$lsout" "ls-dirty"   # no-track branch -> '-' column
+
+print "\n=== nt ls: ahead/behind arrows ==="
+# team/issue-123-some-feature tracks origin and is in sync; a local commit -> ahead 1.
+cd "$TMP/example-repo.worktrees/team/issue-123-some-feature"; print ahead >> ahead.txt; git add -A; git commit -qm ahead
+cd "$TMP/example-repo"; contains "ls shows ahead arrow ↑1" "$(LC_ALL=C.UTF-8 nt ls)" "↑1"
+# move it one commit behind its upstream -> behind 1.
+git -C "$TMP/example-repo.worktrees/team/issue-123-some-feature" reset --hard '@{u}~1' >/dev/null 2>&1
+cd "$TMP/example-repo"; contains "ls shows behind arrow ↓1" "$(LC_ALL=C.UTF-8 nt ls)" "↓1"
+cd "$TMP/example-repo"; nt rm -f ls-dirty >/dev/null
+
+print "\n=== nt done: merged branch -> worktree AND branch deleted ==="
+cd "$TMP/example-repo"; NT_NO_FETCH=1 nt done-merged >/dev/null   # new branch, no extra commits -> merged
+cd "$TMP/example-repo"; nt done done-merged >/dev/null; check "done merged -> 0" "$?" "0"
+absent "$TMP/example-repo.worktrees/done-merged" "done removed the worktree"
+git show-ref --verify --quiet refs/heads/done-merged \
+  && { print "  FAIL: merged branch should be deleted"; ((fail++)); } \
+  || { print "  PASS: merged branch deleted"; ((pass++)); }
+
+print "\n=== nt done: unmerged branch -> worktree gone, branch KEPT (nonzero) ==="
+cd "$TMP/example-repo"; NT_NO_FETCH=1 nt done-unmerged >/dev/null
+print w >> w.txt; git add -A; git commit -qm w                    # unmerged commit
+cd "$TMP/example-repo"; nt done done-unmerged 2>/dev/null; check "done unmerged -> nonzero" "$?" "1"
+absent "$TMP/example-repo.worktrees/done-unmerged" "done removed the worktree even when keeping branch"
+git show-ref --verify --quiet refs/heads/done-unmerged \
+  && { print "  PASS: unmerged branch kept"; ((pass++)); } \
+  || { print "  FAIL: unmerged branch was deleted"; ((fail++)); }
+
+print "\n=== nt done -f: force-delete the unmerged branch ==="
+cd "$TMP/example-repo"
+git worktree add -q "$TMP/example-repo.worktrees/done-force" done-unmerged >/dev/null 2>&1
+cd "$TMP/example-repo"; nt done -f done-force >/dev/null; check "done -f -> 0" "$?" "0"
+git show-ref --verify --quiet refs/heads/done-unmerged \
+  && { print "  FAIL: -f should force-delete the branch"; ((fail++)); } \
+  || { print "  PASS: -f force-deleted the branch"; ((pass++)); }
+
+print "\n=== nt done refuses the main checkout ==="
+cd "$TMP/example-repo"; nt done main 2>/dev/null; check "done main -> nonzero" "$?" "1"
+[[ -d "$TMP/example-repo/.git" ]] && { print "  PASS: main checkout intact"; ((pass++)); } || { print "  FAIL: main gone"; ((fail++)); }
+
+print "\n=== nt done: detached worktree -> removed, no branch to delete (0) ==="
+cd "$TMP/example-repo"; git worktree add -q --detach "$TMP/example-repo.worktrees/done-det" >/dev/null 2>&1
+cd "$TMP/example-repo"; doneout="$(nt done done-det 2>&1)"; check "done detached -> 0" "$?" "0"
+absent "$TMP/example-repo.worktrees/done-det" "done removed the detached worktree"
+contains "done detached notes no branch" "$doneout" "no branch to delete"
+
+print "\n=== nt done: dirty worktree needs -f to force removal ==="
+cd "$TMP/example-repo"; NT_NO_FETCH=1 nt done-dirty >/dev/null
+print x >> dirtyfile.txt                          # untracked -> dirty worktree
+cd "$TMP/example-repo"; nt done done-dirty 2>/dev/null; check "done dirty (no -f) -> nonzero" "$?" "1"
+[[ -d "$TMP/example-repo.worktrees/done-dirty" ]] && { print "  PASS: dirty worktree intact without -f"; ((pass++)); } || { print "  FAIL: dirty worktree removed without -f"; ((fail++)); }
+cd "$TMP/example-repo"; nt done -f done-dirty >/dev/null; check "done -f dirty -> 0" "$?" "0"
+absent "$TMP/example-repo.worktrees/done-dirty" "done -f force-removed the dirty worktree"
+
+print "\n=== _nt_gone_branches: detects a gone upstream ==="
+cd "$TMP/example-repo"
+git push -q origin "HEAD:refs/heads/throwaway"          # create remote branch
+git fetch -q origin
+git branch --quiet throwaway origin/throwaway 2>/dev/null
+git branch --quiet --set-upstream-to=origin/throwaway throwaway >/dev/null 2>&1
+git push -q origin --delete throwaway                   # remote vanishes
+git fetch -pq origin                                    # prune -> upstream marked gone
+contains "throwaway listed as gone" "$(_nt_gone_branches)" "throwaway"
+
+print "\n=== _nt_delete_branches: deletes and reports (the prune delete loop) ==="
+delout="$(_nt_delete_branches throwaway 2>&1)"
+contains "reports the deletion" "$delout" "deleted branch throwaway"
+contains "reports the old sha"  "$delout" "recover via git reflog"
+git show-ref --verify --quiet refs/heads/throwaway \
+  && { print "  FAIL: throwaway not deleted"; ((fail++)); } \
+  || { print "  PASS: _nt_delete_branches removed throwaway"; ((pass++)); }
+
+print "\n=== nt prune: worktree prune + empty-dir cleanup ==="
+# Use a fresh nested namespace so no other worktree shares the parent dir.
+cd "$TMP/example-repo"; NT_NO_FETCH=1 nt nest-ns/leaf >/dev/null
+cd "$TMP/example-repo"; nt rm nest-ns/leaf >/dev/null   # leaves an empty nest-ns/ dir
+[[ -d "$TMP/example-repo.worktrees/nest-ns" ]] && { print "  PASS: empty nest-ns/ dir present pre-prune"; ((pass++)); } || { print "  FAIL: setup"; ((fail++)); }
+nt prune </dev/null >/dev/null                          # </dev/null: non-tty -> no interactive branch deletion
+absent "$TMP/example-repo.worktrees/nest-ns" "prune removed the empty nest-ns/ dir"
+
+print "\n=== nt prune: stale (deleted-on-disk) worktree entry ==="
+cd "$TMP/example-repo"; NT_NO_FETCH=1 nt stale-wt >/dev/null
+cd "$TMP/example-repo"; rm -rf "$TMP/example-repo.worktrees/stale-wt"   # vanish without git's knowledge
+nt prune </dev/null >/dev/null
+[[ "$(git worktree list)" == *"stale-wt"* ]] && { print "  FAIL: stale entry still listed"; ((fail++)); } || { print "  PASS: stale entry pruned"; ((pass++)); }
+
+print "\n=== nt prune (non-tty): lists gone branches but never deletes them ==="
+cd "$TMP/example-repo"
+git push -q origin "HEAD:refs/heads/gonelist"
+git fetch -q origin
+git branch --quiet gonelist origin/gonelist 2>/dev/null
+git branch --quiet --set-upstream-to=origin/gonelist gonelist >/dev/null 2>&1
+git push -q origin --delete gonelist
+git fetch -pq origin                                   # upstream now [gone]
+pruneout="$(cd "$TMP/example-repo"; nt prune </dev/null 2>&1)"   # </dev/null -> non-tty guard
+contains "prune lists the gone branch" "$pruneout" "gonelist"
+git show-ref --verify --quiet refs/heads/gonelist \
+  && { print "  PASS: non-tty prune did NOT delete the branch"; ((pass++)); } \
+  || { print "  FAIL: non-tty prune deleted a branch (safety guard broken!)"; ((fail++)); }
+git branch -D gonelist >/dev/null 2>&1
+
+print "\n=== _nt_need_fzf: clear message when fzf is missing ==="
+fzout="$(PATH=/var/empty _nt_need_fzf 2>&1)"; fzrc=$?
+check    "fzf-missing -> nonzero" "$fzrc" "1"
+contains "fzf-missing message"    "$fzout" "fzf required"
+
 print "\n=== not in a repo -> error ==="
 cd "$TMP"; nt foo;    check "create -> nonzero" "$?" "1"
 cd "$TMP"; nt cd foo; check "cd -> nonzero" "$?" "1"
