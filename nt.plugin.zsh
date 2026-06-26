@@ -155,16 +155,24 @@ _nt_ls() {
   ' <<<"$wtlist")"
   (( ${#Pp} )) || return 0
 
-  # Ahead/behind for ALL local branches in a single call (no per-worktree
+  # Ahead/behind for the worktree branches in a single call (no per-worktree
   # rev-list): %(upstream) tells us whether an upstream exists, %(upstream:track)
-  # gives "[ahead N, behind M]" / "[gone]" / "" (in sync).
+  # gives "[ahead N, behind M]" / "[gone]" / "" (in sync). Scoped to just the
+  # branches that have a worktree, so the cost tracks the worktree count, not the
+  # repo's total branch count (ref names can't contain glob metachars, so each
+  # "refs/heads/$b" is an exact pattern — no over-match).
   local -A UPS TRK
-  local bn us tk
-  while IFS=$tab read -r bn us tk; do
-    [[ -z "$bn" ]] && continue
-    [[ -n "$us" ]] && UPS[$bn]=1
-    TRK[$bn]="$tk"
-  done < <(command git for-each-ref --format="%(refname:short)$tab%(upstream)$tab%(upstream:track)" refs/heads 2>/dev/null)
+  local -a wbranches
+  local b2
+  for b2 in "${Bb[@]}"; do [[ -n "$b2" ]] && wbranches+=("refs/heads/$b2"); done
+  if (( ${#wbranches} )); then
+    local bn us tk
+    while IFS=$tab read -r bn us tk; do
+      [[ -z "$bn" ]] && continue
+      [[ -n "$us" ]] && UPS[$bn]=1
+      TRK[$bn]="$tk"
+    done < <(command git for-each-ref --format="%(refname:short)$tab%(upstream)$tab%(upstream:track)" "${wbranches[@]}" 2>/dev/null)
+  fi
 
   # Dirty flags, computed in parallel — `git status` per worktree is the slow
   # part, so fan out across worktrees (bounded) and collect a path->dirty map.
