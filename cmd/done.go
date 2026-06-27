@@ -66,7 +66,7 @@ func newDoneCmd() *cobra.Command {
 			doneb := r.BranchAt(target)
 
 			// Step out of the tree before removing it.
-			if pwd, _ := os.Getwd(); pwd == target || strings.HasPrefix(pwd, target+string(os.PathSeparator)) {
+			if pwd := currentDir(); pwd == target || strings.HasPrefix(pwd, target+string(os.PathSeparator)) {
 				shell.SignalCD(r.MainDir)
 			}
 

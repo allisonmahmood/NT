@@ -67,8 +67,13 @@ func PruneDirs(root string, live []string) int {
 		dirs = append(dirs, path)
 		return nil
 	})
-	// Deepest first so a parent is tried after its children are gone.
-	sort.Slice(dirs, func(i, j int) bool { return len(dirs[i]) > len(dirs[j]) })
+	// Deepest first so a parent is tried after its children are gone. Depth is
+	// the path-separator count (byte length is not depth); the fixed-point loop
+	// below is the real guarantee, this just minimizes its iterations.
+	sep := string(os.PathSeparator)
+	sort.Slice(dirs, func(i, j int) bool {
+		return strings.Count(dirs[i], sep) > strings.Count(dirs[j], sep)
+	})
 
 	removed := 0
 	for {

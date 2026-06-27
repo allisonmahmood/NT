@@ -33,3 +33,14 @@ func fail(format string, a ...any) {
 	warn(format, a...)
 	os.Exit(1)
 }
+
+// currentDir returns the shell's working directory for the step-out check
+// (whether we're standing inside a worktree about to be removed). It prefers
+// os.Getwd but falls back to $PWD — the shell's logical cwd, what the zsh
+// original used — so a Getwd failure never silently strands the shell.
+func currentDir() string {
+	if wd, err := os.Getwd(); err == nil && wd != "" {
+		return wd
+	}
+	return os.Getenv("PWD")
+}

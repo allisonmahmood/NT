@@ -71,7 +71,7 @@ func newRmCmd() *cobra.Command {
 
 			// Step out of any tree we're about to remove (the bg delete can't cd
 			// for us); keep the main-checkout guard as a backstop.
-			pwd, _ := os.Getwd()
+			pwd := currentDir()
 			var doomed []string
 			stepOut := false
 			for _, t := range targets {

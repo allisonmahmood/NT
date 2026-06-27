@@ -59,7 +59,7 @@ func runCreate(r *worktree.Repo, args []string) {
 
 	// Build target path (branch may contain '/').
 	dest := r.Dest(branch)
-	if _, err := os.Lstat(dest); err == nil {
+	if _, err := os.Stat(dest); err == nil { // matches zsh `[[ -e ]]` (follows symlinks)
 		fail("target path already exists: %s", dest)
 	}
 	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
