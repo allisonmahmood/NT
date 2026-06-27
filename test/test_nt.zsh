@@ -75,6 +75,15 @@ print "\n=== nt rm refuses the main checkout ==="
 cd "$TMP/example-repo"; nt rm main; check "rm main -> nonzero" "$?" "1"
 [[ -d "$TMP/example-repo/.git" ]] && { print "  PASS: main checkout intact"; ((pass++)); } || { print "  FAIL: main gone"; ((fail++)); }
 
+print "\n=== nt rm main <other>: main among targets aborts the whole batch ==="
+cd "$TMP/example-repo"; NT_NO_FETCH=1 nt batch-keep >/dev/null
+cd "$TMP/example-repo"; nt rm main batch-keep 2>/dev/null; check "main among targets -> nonzero" "$?" "1"
+[[ -d "$TMP/example-repo.worktrees/batch-keep" ]] \
+  && { print "  PASS: nothing removed when main is in the batch"; ((pass++)); } \
+  || { print "  FAIL: removed a worktree even though main was in the batch"; ((fail++)); }
+[[ -d "$TMP/example-repo/.git" ]] && { print "  PASS: main checkout intact (mixed batch)"; ((pass++)); } || { print "  FAIL: main gone"; ((fail++)); }
+cd "$TMP/example-repo"; nt rm batch-keep >/dev/null   # cleanup
+
 print "\n=== nt rm the worktree you're standing in ==="
 cd "$TMP/example-repo"; nt temp-del >/dev/null
 check "now inside temp-del" "$PWD" "$TMP/example-repo.worktrees/temp-del"
@@ -103,6 +112,37 @@ nt rm leaf 2>/dev/null; check "ambiguous leaf -> nonzero" "$?" "1"
 [[ -d "$TMP/example-repo.worktrees/dup-a/leaf" && -d "$TMP/example-repo.worktrees/dup-b/leaf" ]] \
   && { print "  PASS: both ambiguous worktrees intact"; ((pass++)); } \
   || { print "  FAIL: an ambiguous worktree was removed"; ((fail++)); }
+
+print "\n=== nt rm <a> <b>: remove several worktrees in one call ==="
+cd "$TMP/example-repo"; NT_NO_FETCH=1 nt multi-a >/dev/null
+cd "$TMP/example-repo"; NT_NO_FETCH=1 nt multi-b >/dev/null
+cd "$TMP/example-repo"; nt rm multi-a multi-b >/dev/null; check "rm of several -> 0" "$?" "0"
+absent "$TMP/example-repo.worktrees/multi-a" "first of several removed"
+absent "$TMP/example-repo.worktrees/multi-b" "second of several removed"
+
+print "\n=== nt rm <good> <bad>: a single bad target removes nothing ==="
+cd "$TMP/example-repo"; NT_NO_FETCH=1 nt multi-keep >/dev/null
+cd "$TMP/example-repo"; nt rm multi-keep no-such-worktree 2>/dev/null; check "bad target among them -> nonzero" "$?" "1"
+[[ -d "$TMP/example-repo.worktrees/multi-keep" ]] \
+  && { print "  PASS: good target untouched when another is bad"; ((pass++)); } \
+  || { print "  FAIL: removed a worktree despite a bad target in the list"; ((fail++)); }
+cd "$TMP/example-repo"; nt rm multi-keep >/dev/null   # cleanup
+
+print "\n=== nt rm <dup> <dup>: repeated / aliased targets de-dup, removed once ==="
+cd "$TMP/example-repo"; NT_NO_FETCH=1 nt dup-target >/dev/null
+cd "$TMP/example-repo"; nt rm dup-target dup-target >/dev/null; check "repeated target -> 0" "$?" "0"
+absent "$TMP/example-repo.worktrees/dup-target" "repeated target removed once"
+cd "$TMP/example-repo"; NT_NO_FETCH=1 nt dup-alias >/dev/null
+cd "$TMP/example-repo"; nt rm dup-alias "$TMP/example-repo.worktrees/dup-alias" >/dev/null; check "branch + its own path -> 0" "$?" "0"
+absent "$TMP/example-repo.worktrees/dup-alias" "two spellings of one tree removed once"
+
+print "\n=== nt rm <a> <b> -f: force flag is accepted in any position ==="
+cd "$TMP/example-repo"; NT_NO_FETCH=1 nt fpos-a >/dev/null
+cd "$TMP/example-repo"; NT_NO_FETCH=1 nt fpos-b >/dev/null
+print scratch >> "$TMP/example-repo.worktrees/fpos-a/dirty.txt"   # untracked -> needs -f to remove
+cd "$TMP/example-repo"; nt rm fpos-a fpos-b -f >/dev/null; check "trailing -f -> 0" "$?" "0"
+absent "$TMP/example-repo.worktrees/fpos-a" "dirty target removed via trailing -f"
+absent "$TMP/example-repo.worktrees/fpos-b" "clean target removed via trailing -f"
 
 print "\n=== nt ls: dirty marker + legend + in-sync ==="
 # LC_ALL=C.UTF-8 pins the up/down glyphs to arrows so the assertions are locale-independent.

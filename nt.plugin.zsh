@@ -219,7 +219,7 @@ _nt_ls() {
 # --- nt() --------------------------------------------------------------------
 # nt <branch> [base]    create/switch to a worktree and cd into it
 # nt cd   [branch]      cd to an existing worktree (fzf picker if branch omitted)
-# nt rm   [-f] [target] remove a worktree (fzf picker if target omitted)
+# nt rm   [-f] [target] remove worktree(s) (fzf multi-picker if target omitted)
 # nt done [-f] [target] remove a worktree AND delete its local branch
 # nt prune              prune stale worktrees + empty dirs; offer to delete gone branches
 # nt home               cd back to the main checkout
@@ -251,7 +251,7 @@ nt() {
       print "usage:"
       print "  nt <branch> [base]    create/switch to a worktree (new branch from $(_nt_base_desc))"
       print "  nt cd   [branch]      cd to a worktree (fzf picker if branch omitted)"
-      print "  nt rm   [-f] [target] remove a worktree (fzf picker if target omitted)"
+      print "  nt rm   [-f] [target] remove worktree(s) (fzf multi-picker if target omitted)"
       print "  nt done [-f] [target] remove a worktree AND delete its local branch"
       print "  nt prune              prune stale worktrees + empty dirs; offer to delete gone branches"
       print "  nt home               cd back to the main checkout"
@@ -288,31 +288,69 @@ nt() {
       ;;
     rm|remove)
       shift
-      local force=""
-      if [[ "${1:-}" == "-f" || "${1:-}" == "--force" ]]; then force="--force"; shift; fi
-      local target rcr
+      # -f/--force may sit anywhere among the targets, so `nt rm a b -f` reads as
+      # naturally as `nt rm -f a b`; everything else is a worktree identifier.
+      local force="" arg
+      local -a rest
+      for arg in "$@"; do
+        case "$arg" in
+          -f|--force) force="--force" ;;
+          *)          rest+=("$arg") ;;
+        esac
+      done
+      set -- "${rest[@]}"
+      # Collect the worktree path(s) to remove: explicit target(s), or — when none
+      # are given — an fzf multi-picker (space to mark several, like `nt prune`).
+      local -a targets
       if [[ -n "${1:-}" ]]; then
-        target="$(_nt_resolve_wt "$1" "$wtlist")"; rcr=$?
-        (( rcr == 2 )) && return 1            # ambiguous; candidates already listed
-        if (( rcr != 0 )) || [[ -z "$target" ]]; then
-          print -u2 "nt: no worktree for branch or path '$1'"; return 1
-        fi
+        # Resolve every explicit target up front, and refuse the main checkout
+        # here too — so an unknown/ambiguous identifier (or a stray `main`) bails
+        # before anything is removed: a typo never half-finishes the batch.
+        local t rcr
+        for arg in "$@"; do
+          t="$(_nt_resolve_wt "$arg" "$wtlist")"; rcr=$?
+          (( rcr == 2 )) && return 1            # ambiguous; candidates already listed
+          if (( rcr != 0 )) || [[ -z "$t" ]]; then
+            print -u2 "nt: no worktree for branch or path '$arg'"; return 1
+          fi
+          if [[ "$t" == "$main_dir" ]]; then
+            print -u2 "nt: refusing to remove the main checkout"; return 1
+          fi
+          targets+=("$t")
+        done
       else
         _nt_need_fzf || return 1
-        local choice
-        choice="$(_nt_wt_targets | fzf --height=40% --reverse --prompt='remove worktree> ')" || return
-        [[ -z "$choice" ]] && return
-        target="$(_nt_resolve_wt "$choice" "$wtlist")" || return
+        local picks choice t
+        picks="$(_nt_wt_targets | fzf --multi --height=40% --reverse \
+                   --bind 'space:toggle' \
+                   --header='space=mark · enter=remove (no marks = highlighted row)' \
+                   --prompt='remove worktree> ')" || return
+        [[ -z "$picks" ]] && return
+        for choice in ${(f)picks}; do
+          [[ -z "$choice" ]] && continue
+          t="$(_nt_resolve_wt "$choice" "$wtlist")" || continue
+          [[ -n "$t" ]] && targets+=("$t")
+        done
       fi
-      [[ -z "$target" ]] && return
-      if [[ "$target" == "$main_dir" ]]; then
-        print -u2 "nt: refusing to remove the main checkout"
-        return 1
-      fi
-      # If we're standing inside the tree we're removing, step out to main first.
-      case "$PWD/" in "$target"/*) cd "$main_dir";; esac
-      git worktree remove $force "$target" && print "nt: removed $target"
-      return
+      targets=(${(u)targets})                  # de-dupe, preserve order
+      (( ${#targets} )) || return 0            # nothing resolved (picker race) -> clean no-op
+      # Remove each. The main checkout is refused above for explicit targets and
+      # never offered by the picker, but keep the guard as a backstop. If we're
+      # standing inside a tree being removed, step out to main first.
+      local target rc=0
+      for target in "${targets[@]}"; do
+        if [[ "$target" == "$main_dir" ]]; then
+          print -u2 "nt: refusing to remove the main checkout"
+          rc=1; continue
+        fi
+        case "$PWD/" in "$target"/*) cd "$main_dir";; esac
+        if git worktree remove $force "$target"; then
+          print "nt: removed $target"
+        else
+          rc=1
+        fi
+      done
+      return $rc
       ;;
     done|finish)
       shift

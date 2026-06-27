@@ -42,7 +42,7 @@ already run — as it has under oh-my-zsh). One line. Done.
 |---|---|
 | `nt <branch> [base]` | spin up / jump to a worktree and `cd` in |
 | `nt cd [branch]` | `cd` to an existing worktree (fzf picker if no branch) |
-| `nt rm [-f] [target]` | nuke a worktree (fzf picker if no target) |
+| `nt rm [-f] [target...]` | nuke worktree(s) (fzf multi-picker if no target) |
 | `nt done [-f] [target]` | nuke a worktree **and** delete its local branch |
 | `nt prune` | tidy up: drop stale worktrees + empty dirs, offer to delete gone branches |
 | `nt home` | `cd` back to the main checkout, wherever you are |
@@ -118,11 +118,16 @@ locale the arrows degrade to `^n`/`vn` so the columns still line up.
 - `NT_NO_FETCH=1 nt foo` skips the network fetch (offline, or just impatient).
 - A local branch is only ever fast-forwarded to origin when it's a clean FF —
   your diverged local commits are never touched.
-- `nt rm <target>` (and `nt done <target>`) take a branch name, a full worktree
-  path, or a unique path tail (the last path component, usually). An ambiguous tail
-  is refused, with the matches listed. No target → fzf picker over every worktree
-  but the main checkout. Either way it flat-out refuses to remove the main checkout,
-  and if you `rm`/`done` the worktree you're standing in, it steps you back home first.
+- `nt rm [target...]` (and `nt done <target>`) take a branch name, a full worktree
+  path, or a unique path tail (the last path component, usually). `nt rm` takes
+  several at once (`nt rm fix-login spike`, and `-f` may go anywhere) — it resolves
+  the whole list up front and removes **nothing** unless *every* target checks out:
+  an ambiguous tail is refused with the matches listed, and naming the main checkout
+  aborts the batch too. No target → an fzf **multi-picker**: **space** to mark each
+  worktree you want gone, **enter** to remove them all (no marks = just the
+  highlighted row), over every worktree but the main checkout. Either way it flat-out
+  refuses to remove the main checkout, and if you `rm`/`done` the worktree you're
+  standing in, it steps you back home first.
 - The interactive pickers (`nt cd`/`nt rm`/`nt done` with no argument, and the
   `nt prune` branch cleanup) need [`fzf`](https://github.com/junegunn/fzf). Without
   it you get a one-line "fzf required …" nudge instead of a cryptic error — just
