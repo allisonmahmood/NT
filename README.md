@@ -72,6 +72,12 @@ or your actual remote/default, or `main (no remote)` — so it never lies to you
 When you're done with a branch, or the worktree dir has filled up with stuff
 you've long since merged:
 
+- **`nt rm [target...]`** → remove worktree(s), **fast**. Deleting a worktree is
+  mostly the cost of `rm`-ing its working tree (a fat `node_modules` can take
+  seconds *each*), so `nt rm` renames each tree aside instantly and reclaims the
+  disk in the background — it returns at once even when you nuke ten heavy trees.
+  Same safety as `git worktree remove`: it refuses a dirty or locked worktree (and
+  anything git can't vouch for) unless you pass `-f`. No target → fzf multi-picker.
 - **`nt done [target]`** → remove the worktree **and** delete its local branch in
   one move. Safe by default (`git branch -d` refuses an unmerged branch and keeps
   it, telling you so); `nt done -f` forces both the removal and the delete. No
@@ -128,6 +134,17 @@ locale the arrows degrade to `^n`/`vn` so the columns still line up.
   highlighted row), over every worktree but the main checkout. Either way it flat-out
   refuses to remove the main checkout, and if you `rm`/`done` the worktree you're
   standing in, it steps you back home first.
+- `nt rm` frees the disk **asynchronously**: it renames each tree to a hidden
+  `.nt-trash-*` dir next to it and `rm`s that in a disowned background job, so the
+  command returns instantly. `nt prune` reaps any `.nt-trash-*` a killed delete left
+  behind (handy after a reboot mid-delete). One caveat: that reaper only sweeps under
+  `<repo>.worktrees/`, so trash left beside a worktree you keep *elsewhere* (e.g. one
+  another tool created outside that dir) won't be auto-reaped — `find ~ -name '.nt-trash-*'`
+  clears it. The fast path only handles worktrees `nt` can confirm are simple (clean,
+  unlocked, no submodule); a dirty, **locked**, or submodule-containing worktree is
+  handed to `git worktree remove` itself, so it behaves exactly as git does — refused
+  without `-f`, and a lock still needs an explicit `git worktree unlock` (git won't drop
+  a lock on a single `-f`).
 - The interactive pickers (`nt cd`/`nt rm`/`nt done` with no argument, and the
   `nt prune` branch cleanup) need [`fzf`](https://github.com/junegunn/fzf). Without
   it you get a one-line "fzf required …" nudge instead of a cryptic error — just
