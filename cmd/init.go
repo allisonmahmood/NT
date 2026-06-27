@@ -10,15 +10,15 @@ import (
 
 func newInitCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:           "init [zsh|bash|fish]",
-		Short:         "Print shell integration (cd shim + completions) to eval/source",
+		Use:   "init [zsh|bash|fish]",
+		Short: "Print shell integration (cd shim + completions) to eval/source",
 		Long: `Print the shell integration for the given shell. Add to your rc file:
 
   zsh:   eval "$(nt init zsh)"
   bash:  eval "$(nt init bash)"
   fish:  nt init fish | source
 
-This defines the thin `+"`nt`"+` shell function that performs the actual cd (a child
+This defines the thin ` + "`nt`" + ` shell function that performs the actual cd (a child
 process can't change its parent shell's directory) and registers tab completion.`,
 		Args:          cobra.ExactArgs(1),
 		ValidArgs:     []string{"zsh", "bash", "fish"},

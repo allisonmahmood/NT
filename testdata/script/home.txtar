@@ -1,0 +1,10 @@
+# home signals a cd back to the main checkout
+exec git init -q -b main repo
+cd repo
+exec git commit -q --allow-empty -m init
+
+env NT_CD_FILE=$WORK/cdf
+exec nt home
+stdout 'main checkout'
+exists $WORK/cdf
+grep 'repo' $WORK/cdf

@@ -1,0 +1,31 @@
+name: release
+
+# Authored now; fires only when a v* tag is pushed (plan §5 — releases come
+# later, once tested on real machines).
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - name: goreleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # GH_PAT pushes the Homebrew tap once the tap repo + secret exist.
+          # GH_PAT: ${{ secrets.GH_PAT }}

@@ -5,11 +5,17 @@ package shellinit
 
 import _ "embed"
 
+// Zsh is the zsh `nt` shim function.
+//
 //go:embed nt.zsh
 var Zsh string
 
+// Bash is the bash `nt` shim function.
+//
 //go:embed nt.bash
 var Bash string
 
+// Fish is the fish `nt` shim function.
+//
 //go:embed nt.fish
 var Fish string

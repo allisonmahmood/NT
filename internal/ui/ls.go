@@ -68,7 +68,7 @@ func Render(r *worktree.Repo) string {
 	var b strings.Builder
 	for _, rw := range rows {
 		fmt.Fprintf(&b, "%s %s  %s  %s%s\n",
-			rw.marker, padRune(rw.disp, maxb), padRune(rw.ab, maxa), rw.path, rw.tag)
+			styleMarker(rw.marker), padRune(rw.disp, maxb), abCell(rw.ab, maxa), rw.path, styleTag(rw.tag))
 	}
 	b.WriteString("* = uncommitted changes")
 	return b.String()
@@ -171,6 +171,16 @@ func padRune(s string, width int) string {
 		return s + strings.Repeat(" ", pad)
 	}
 	return s
+}
+
+// abCell colors the ahead/behind token but pads to its PLAIN rune width, so the
+// (zero-width) color codes never disturb column alignment.
+func abCell(ab string, width int) string {
+	pad := width - utf8.RuneCountInString(ab)
+	if pad < 0 {
+		pad = 0
+	}
+	return styleAB(ab) + strings.Repeat(" ", pad)
 }
 
 func dirExists(p string) bool {

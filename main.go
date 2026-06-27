@@ -14,8 +14,12 @@ import (
 	"github.com/allisonmahmood/nt/cmd"
 )
 
+// version is overridden at release time via -ldflags "-X main.version=...".
+var version = "dev"
+
 func main() {
-	if err := fang.Execute(context.Background(), cmd.Root()); err != nil {
+	cmd.SetVersion(version)
+	if err := fang.Execute(context.Background(), cmd.Root(), fang.WithVersion(version)); err != nil {
 		os.Exit(1)
 	}
 }

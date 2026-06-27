@@ -10,10 +10,21 @@ import (
 	"github.com/allisonmahmood/nt/internal/ui"
 )
 
+// version is the binary version, set via SetVersion from main (ldflags).
+var version = "dev"
+
+// SetVersion records the build version shown by `nt --version`.
+func SetVersion(v string) {
+	if v != "" {
+		version = v
+	}
+}
+
 func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:   "nt [branch] [base]",
-		Short: "Git worktrees, minus the ceremony",
+		Use:     "nt [branch] [base]",
+		Version: version,
+		Short:   "Git worktrees, minus the ceremony",
 		Long: `nt — navigate tree. Spin up a git worktree (or jump to it if it exists),
 cd in, and get out of your way. Worktrees live next to the main checkout in
 <repo>.worktrees/<branch>.

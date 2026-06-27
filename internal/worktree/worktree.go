@@ -24,9 +24,9 @@ type Worktree struct {
 
 // Repo is the resolved context every nt subcommand operates within.
 type Repo struct {
-	MainDir   string      // the main checkout (first porcelain entry)
-	Root      string      // where worktrees live: <repo>.worktrees (or $NT_ROOT)
-	Worktrees []Worktree  // in porcelain order (main checkout first)
+	MainDir   string     // the main checkout (first porcelain entry)
+	Root      string     // where worktrees live: <repo>.worktrees (or $NT_ROOT)
+	Worktrees []Worktree // in porcelain order (main checkout first)
 }
 
 // Parse turns `git worktree list --porcelain` output into Worktrees, preserving
