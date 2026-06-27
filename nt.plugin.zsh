@@ -8,6 +8,11 @@
 # Resolve this file's directory (works when sourced).
 NT_DIR="${${(%):-%x}:A:h}"
 
+# Prefix for the rename-aside dirs `nt rm` leaves for its background delete. Single
+# source of truth: the producer (`_nt_remove_worktrees`) and the reaper (`nt prune`)
+# both build off this, so they can never drift apart.
+_NT_TRASH_PREFIX='.nt-trash-'
+
 # Make completion discoverable, and register it even if compinit already ran
 # (e.g. oh-my-zsh runs compinit before this file is sourced).
 fpath+=("$NT_DIR/completions")
@@ -101,6 +106,90 @@ _nt_need_fzf() {
   command -v fzf >/dev/null 2>&1 && return 0
   print -u2 "nt: fzf required for the interactive picker (pass a branch/target to skip it)"
   return 1
+}
+
+# Remove a set of resolved worktree paths FAST. `git worktree remove` is dominated
+# by deleting the working tree — a heavy node_modules can take seconds *each*, so
+# removing a handful serially stalls for many seconds. The trick: for a worktree we
+# can POSITIVELY confirm is simple, rename it aside (an instant same-directory mv),
+# let ONE `git worktree prune` drop the now-dangling admin entry, and reclaim the
+# disk in a disowned background `rm` — so the command returns at once however big or
+# many the trees are.
+#   $1     = "--force" or ""  (passed straight through to git for the delegated path)
+#   $2     = main checkout path (where the git subcommands run)
+#   $3.. = absolute worktree paths to remove (must already exclude the main checkout)
+# Prints a line per removed tree; returns nonzero if any tree was refused or failed.
+#
+# "Simple" = readable by git, clean (`--ignore-submodules=none`, exactly git's own
+# check), unlocked, and submodule-free (no mode-160000 gitlink in the index — exactly
+# git's own validate_no_submodules; a submodule's per-worktree object store lives under
+# the admin dir our prune would delete). Anything NOT provably simple — dirty,
+# locked, has a submodule, or anything git can't vouch for — is handed to
+# `git worktree remove` itself, which already does the right thing (refuses without
+# -f; under -f removes a dirty/submodule tree but still refuses a locked one). So a
+# misclassification fails SAFE — it just takes git's slower, correct path — and we
+# never reimplement git's tricky removal semantics. The common case (a pile of clean,
+# merged worktrees) is all fast-path, so `nt rm` stays instant.
+_nt_remove_worktrees() {
+  emulate -L zsh
+  local force="$1" main_dir="$2"; shift 2
+  local -a targets=("$@")
+  (( ${#targets} )) || return 0
+  typeset -gi _nt_trash_seq          # monotonic across calls in this shell (no name reuse)
+
+  # One parallel fan-out (the status walk is the only nontrivial cost left once the
+  # delete is deferred) flags the fast-path-eligible trees. NUL in and out so every
+  # byte of a path survives verbatim; a tree opts into the fast path ONLY by being
+  # printed back — silence (a git error, a killed worker) leaves it to git's path.
+  local -A SIMPLE
+  local p
+  while IFS= read -r -d '' p; do
+    [[ -n "$p" ]] && SIMPLE[$p]=1
+  done < <(print -rN -- "${targets[@]}" | NT_FORCE="$force" xargs -0 -P 16 -I {} sh -c '
+      wt="$1"
+      admin=$(git -C "$wt" rev-parse --absolute-git-dir 2>/dev/null) || exit 0   # unreadable
+      [ -f "$admin/locked" ] && exit 0                                            # locked
+      git -C "$wt" ls-files -s 2>/dev/null | grep -q "^160000 " && exit 0         # has a submodule/gitlink
+      if [ -z "$NT_FORCE" ]; then                        # forcing skips the clean check
+        st=$(git -C "$wt" status --porcelain --ignore-submodules=none 2>/dev/null) || exit 0
+        [ -n "$st" ] && exit 0                                                    # dirty
+      fi
+      printf "%s\000" "$wt"
+    ' _ {})
+
+  local t trash rc=0 swept=0
+  local -a doomed
+  # Pass 1: hand the not-provably-simple ones to git (dirs still in place); it prints
+  # its own precise reason on a refusal.
+  for t in "${targets[@]}"; do
+    [[ -n "${SIMPLE[$t]:-}" ]] && continue
+    if command git -C "$main_dir" worktree remove $force "$t"; then
+      print "nt: removed $t"
+    else
+      rc=1
+    fi
+  done
+  # Pass 2: fast-path the simple ones — rename aside (instant), reclaim disk later.
+  for t in "${targets[@]}"; do
+    [[ -n "${SIMPLE[$t]:-}" ]] || continue
+    if [[ ! -e "$t" ]]; then
+      # Already gone — e.g. an earlier target was a parent worktree that dragged this
+      # nested one along. Count it as removed (not a failure); prune cleans its entry.
+      print "nt: removed $t"; swept=1; continue
+    fi
+    trash="${t:h}/${_NT_TRASH_PREFIX}$$-$(( ++_nt_trash_seq ))"
+    if mv -- "$t" "$trash" 2>/dev/null; then
+      doomed+=("$trash"); print "nt: removed $t"
+    else
+      print -u2 "nt: could not remove $t"; rc=1
+    fi
+  done
+
+  if (( ${#doomed} || swept )); then
+    command git -C "$main_dir" worktree prune          # drop the renamed-aside (and any dragged) entries
+    (( ${#doomed} )) && rm -rf -- "${doomed[@]}" &!    # reclaim disk off the interactive path
+  fi
+  return $rc
 }
 
 # Human description of where a brand-new branch is forked from, for help text —
@@ -227,7 +316,7 @@ _nt_ls() {
 # --- nt() --------------------------------------------------------------------
 # nt <branch> [base]    create/switch to a worktree and cd into it
 # nt cd   [branch]      cd to an existing worktree (fzf picker if branch omitted)
-# nt rm   [-f] [target] remove a worktree (fzf picker if target omitted)
+# nt rm   [-f] [target] remove worktree(s) (fzf multi-picker if target omitted)
 # nt done [-f] [target] remove a worktree AND delete its local branch
 # nt prune              prune stale worktrees + empty dirs; offer to delete gone branches
 # nt home               cd back to the main checkout
@@ -259,7 +348,7 @@ nt() {
       print "usage:"
       print "  nt <branch> [base]    create/switch to a worktree (new branch from $(_nt_base_desc))"
       print "  nt cd   [branch]      cd to a worktree (fzf picker if branch omitted)"
-      print "  nt rm   [-f] [target] remove a worktree (fzf picker if target omitted)"
+      print "  nt rm   [-f] [target] remove worktree(s) (fzf multi-picker if target omitted)"
       print "  nt done [-f] [target] remove a worktree AND delete its local branch"
       print "  nt prune              prune stale worktrees + empty dirs; offer to delete gone branches"
       print "  nt home               cd back to the main checkout"
@@ -296,30 +385,66 @@ nt() {
       ;;
     rm|remove)
       shift
-      local force=""
-      if [[ "${1:-}" == "-f" || "${1:-}" == "--force" ]]; then force="--force"; shift; fi
-      local target rcr
+      # -f/--force may sit anywhere among the targets, so `nt rm a b -f` reads as
+      # naturally as `nt rm -f a b`; everything else is a worktree identifier.
+      local force="" arg
+      local -a rest
+      for arg in "$@"; do
+        case "$arg" in
+          -f|--force) force="--force" ;;
+          *)          rest+=("$arg") ;;
+        esac
+      done
+      set -- "${rest[@]}"
+      # Collect the worktree path(s) to remove: explicit target(s), or — when none
+      # are given — an fzf multi-picker (space to mark several, like `nt prune`).
+      local -a targets
       if [[ -n "${1:-}" ]]; then
-        target="$(_nt_resolve_wt "$1" "$wtlist")"; rcr=$?
-        (( rcr == 2 )) && return 1            # ambiguous; candidates already listed
-        if (( rcr != 0 )) || [[ -z "$target" ]]; then
-          print -u2 "nt: no worktree for branch or path '$1'"; return 1
-        fi
+        # Resolve every explicit target up front, and refuse the main checkout
+        # here too — so an unknown/ambiguous identifier (or a stray `main`) bails
+        # before anything is removed: a typo never half-finishes the batch.
+        local t rcr
+        for arg in "$@"; do
+          t="$(_nt_resolve_wt "$arg" "$wtlist")"; rcr=$?
+          (( rcr == 2 )) && return 1            # ambiguous; candidates already listed
+          if (( rcr != 0 )) || [[ -z "$t" ]]; then
+            print -u2 "nt: no worktree for branch or path '$arg'"; return 1
+          fi
+          if [[ "$t" == "$main_dir" ]]; then
+            print -u2 "nt: refusing to remove the main checkout"; return 1
+          fi
+          targets+=("$t")
+        done
       else
         _nt_need_fzf || return 1
-        local choice
-        choice="$(_nt_wt_targets | fzf --height=40% --reverse --prompt='remove worktree> ')" || return
-        [[ -z "$choice" ]] && return
-        target="$(_nt_resolve_wt "$choice" "$wtlist")" || return
+        local picks choice t
+        picks="$(_nt_wt_targets | fzf --multi --height=40% --reverse \
+                   --bind 'space:toggle' \
+                   --header='space=mark · enter=remove (no marks = highlighted row)' \
+                   --prompt='remove worktree> ')" || return
+        [[ -z "$picks" ]] && return
+        for choice in ${(f)picks}; do
+          [[ -z "$choice" ]] && continue
+          t="$(_nt_resolve_wt "$choice" "$wtlist")" || continue
+          [[ -n "$t" ]] && targets+=("$t")
+        done
       fi
-      [[ -z "$target" ]] && return
-      if [[ "$target" == "$main_dir" ]]; then
-        print -u2 "nt: refusing to remove the main checkout"
-        return 1
-      fi
-      # If we're standing inside the tree we're removing, step out to main first.
-      case "$PWD/" in "$target"/*) cd "$main_dir";; esac
-      git worktree remove $force "$target" && print "nt: removed $target"
+      targets=(${(u)targets})                  # de-dupe, preserve order
+      (( ${#targets} )) || return 0            # nothing resolved (picker race) -> clean no-op
+      # The main checkout is refused above for explicit targets and never offered by
+      # the picker, but keep the guard as a backstop. Step out of any tree we're
+      # about to remove first — the background delete can't cd for us.
+      local target
+      local -a doomed_targets
+      for target in "${targets[@]}"; do
+        if [[ "$target" == "$main_dir" ]]; then
+          print -u2 "nt: refusing to remove the main checkout"; continue
+        fi
+        case "$PWD/" in "$target"/*) cd "$main_dir";; esac
+        doomed_targets+=("$target")
+      done
+      (( ${#doomed_targets} )) || return 1
+      _nt_remove_worktrees "$force" "$main_dir" "${doomed_targets[@]}"
       return
       ;;
     done|finish)
@@ -377,11 +502,16 @@ nt() {
       #    you keep inside a checked-out worktree are left untouched.
       local removed=0 d w
       if [[ -d "$root" ]]; then
-        local -a live prune_expr cand
+        local -a live prune_expr cand trash
         live=(${(f)"$(git worktree list --porcelain | awk '/^worktree /{print substr($0,10)}')"})
         for w in "${live[@]}"; do prune_expr+=(-path "$w" -prune -o); done
-        # Candidate dirs under root, skipping live worktrees and their contents.
-        cand=(${(f)"$(find "$root" "${prune_expr[@]}" -type d ! -path "$root" -print 2>/dev/null)"})
+        # Reap any abandoned `nt rm` trash (a background delete that didn't finish)
+        # so its disk — and the now-empty parent dirs around it — get reclaimed too.
+        trash=(${(f)"$(find "$root" "${prune_expr[@]}" -type d -name "${_NT_TRASH_PREFIX}*" -prune -print 2>/dev/null)"})
+        (( ${#trash} )) && rm -rf -- "${trash[@]}"
+        # Candidate dirs under root, skipping live worktrees AND any surviving trash
+        # (don't walk a huge half-deleted node_modules), down to empty parents.
+        cand=(${(f)"$(find "$root" "${prune_expr[@]}" -name "${_NT_TRASH_PREFIX}*" -prune -o -type d ! -path "$root" -print 2>/dev/null)"})
         # rmdir empties, repeating so nested parents collapse once their children go.
         local changed=1
         while (( changed )); do

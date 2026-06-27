@@ -75,6 +75,15 @@ print "\n=== nt rm refuses the main checkout ==="
 cd "$TMP/example-repo"; nt rm main; check "rm main -> nonzero" "$?" "1"
 [[ -d "$TMP/example-repo/.git" ]] && { print "  PASS: main checkout intact"; ((pass++)); } || { print "  FAIL: main gone"; ((fail++)); }
 
+print "\n=== nt rm main <other>: main among targets aborts the whole batch ==="
+cd "$TMP/example-repo"; NT_NO_FETCH=1 nt batch-keep >/dev/null
+cd "$TMP/example-repo"; nt rm main batch-keep 2>/dev/null; check "main among targets -> nonzero" "$?" "1"
+[[ -d "$TMP/example-repo.worktrees/batch-keep" ]] \
+  && { print "  PASS: nothing removed when main is in the batch"; ((pass++)); } \
+  || { print "  FAIL: removed a worktree even though main was in the batch"; ((fail++)); }
+[[ -d "$TMP/example-repo/.git" ]] && { print "  PASS: main checkout intact (mixed batch)"; ((pass++)); } || { print "  FAIL: main gone"; ((fail++)); }
+cd "$TMP/example-repo"; nt rm batch-keep >/dev/null   # cleanup
+
 print "\n=== nt rm the worktree you're standing in ==="
 cd "$TMP/example-repo"; nt temp-del >/dev/null
 check "now inside temp-del" "$PWD" "$TMP/example-repo.worktrees/temp-del"
@@ -103,6 +112,177 @@ nt rm leaf 2>/dev/null; check "ambiguous leaf -> nonzero" "$?" "1"
 [[ -d "$TMP/example-repo.worktrees/dup-a/leaf" && -d "$TMP/example-repo.worktrees/dup-b/leaf" ]] \
   && { print "  PASS: both ambiguous worktrees intact"; ((pass++)); } \
   || { print "  FAIL: an ambiguous worktree was removed"; ((fail++)); }
+
+print "\n=== nt rm <a> <b>: remove several worktrees in one call ==="
+cd "$TMP/example-repo"; NT_NO_FETCH=1 nt multi-a >/dev/null
+cd "$TMP/example-repo"; NT_NO_FETCH=1 nt multi-b >/dev/null
+cd "$TMP/example-repo"; nt rm multi-a multi-b >/dev/null; check "rm of several -> 0" "$?" "0"
+absent "$TMP/example-repo.worktrees/multi-a" "first of several removed"
+absent "$TMP/example-repo.worktrees/multi-b" "second of several removed"
+
+print "\n=== nt rm <good> <bad>: a single bad target removes nothing ==="
+cd "$TMP/example-repo"; NT_NO_FETCH=1 nt multi-keep >/dev/null
+cd "$TMP/example-repo"; nt rm multi-keep no-such-worktree 2>/dev/null; check "bad target among them -> nonzero" "$?" "1"
+[[ -d "$TMP/example-repo.worktrees/multi-keep" ]] \
+  && { print "  PASS: good target untouched when another is bad"; ((pass++)); } \
+  || { print "  FAIL: removed a worktree despite a bad target in the list"; ((fail++)); }
+cd "$TMP/example-repo"; nt rm multi-keep >/dev/null   # cleanup
+
+print "\n=== nt rm <dup> <dup>: repeated / aliased targets de-dup, removed once ==="
+cd "$TMP/example-repo"; NT_NO_FETCH=1 nt dup-target >/dev/null
+cd "$TMP/example-repo"; nt rm dup-target dup-target >/dev/null; check "repeated target -> 0" "$?" "0"
+absent "$TMP/example-repo.worktrees/dup-target" "repeated target removed once"
+cd "$TMP/example-repo"; NT_NO_FETCH=1 nt dup-alias >/dev/null
+cd "$TMP/example-repo"; nt rm dup-alias "$TMP/example-repo.worktrees/dup-alias" >/dev/null; check "branch + its own path -> 0" "$?" "0"
+absent "$TMP/example-repo.worktrees/dup-alias" "two spellings of one tree removed once"
+
+print "\n=== nt rm <a> <b> -f: force flag is accepted in any position ==="
+cd "$TMP/example-repo"; NT_NO_FETCH=1 nt fpos-a >/dev/null
+cd "$TMP/example-repo"; NT_NO_FETCH=1 nt fpos-b >/dev/null
+print scratch >> "$TMP/example-repo.worktrees/fpos-a/dirty.txt"   # untracked -> needs -f to remove
+cd "$TMP/example-repo"; nt rm fpos-a fpos-b -f >/dev/null; check "trailing -f -> 0" "$?" "0"
+absent "$TMP/example-repo.worktrees/fpos-a" "dirty target removed via trailing -f"
+absent "$TMP/example-repo.worktrees/fpos-b" "clean target removed via trailing -f"
+
+print "\n=== nt rm <dirty> without -f: refused, worktree kept ==="
+cd "$TMP/example-repo"; NT_NO_FETCH=1 nt keep-dirty >/dev/null
+print scratch >> "$TMP/example-repo.worktrees/keep-dirty/wip.txt"   # untracked -> dirty
+cd "$TMP/example-repo"; nt rm keep-dirty 2>/dev/null; check "dirty rm (no -f) -> nonzero" "$?" "1"
+[[ -d "$TMP/example-repo.worktrees/keep-dirty" ]] \
+  && { print "  PASS: dirty worktree kept without -f"; ((pass++)); } \
+  || { print "  FAIL: dirty worktree removed without -f"; ((fail++)); }
+cd "$TMP/example-repo"; nt rm -f keep-dirty >/dev/null   # cleanup
+
+print "\n=== nt rm is deferred-but-correct: entry gone at once, repo intact ==="
+cd "$TMP/example-repo"; NT_NO_FETCH=1 nt defer-a >/dev/null
+cd "$TMP/example-repo"; NT_NO_FETCH=1 nt defer-b >/dev/null
+cd "$TMP/example-repo"; nt rm defer-a defer-b >/dev/null
+# The working-tree path is renamed aside synchronously, so it's gone the instant
+# nt rm returns — even though the heavy delete finishes in the background.
+absent "$TMP/example-repo.worktrees/defer-a" "defer-a path gone immediately"
+[[ "$(git worktree list)" != *"defer-a"* && "$(git worktree list)" != *"defer-b"* ]] \
+  && { print "  PASS: both entries pruned from git worktree list"; ((pass++)); } \
+  || { print "  FAIL: a removed worktree still listed"; ((fail++)); }
+git fsck --connectivity-only >/dev/null 2>&1 \
+  && { print "  PASS: repo fsck clean after deferred removal"; ((pass++)); } \
+  || { print "  FAIL: fsck reported a problem after deferred removal"; ((fail++)); }
+
+print "\n=== nt rm: back-to-back removals in one shell don't collide on trash names ==="
+cd "$TMP/example-repo"; NT_NO_FETCH=1 nt b2b-a >/dev/null
+cd "$TMP/example-repo"; NT_NO_FETCH=1 nt b2b-b >/dev/null
+cd "$TMP/example-repo"; nt rm b2b-a >/dev/null      # two SEPARATE calls, same shell,
+cd "$TMP/example-repo"; nt rm b2b-b >/dev/null       # same parent dir -> name reuse risk
+for i in {1..100}; do [[ -z "$(find "$TMP/example-repo.worktrees" -name '.nt-trash-*' 2>/dev/null)" ]] && break; sleep 0.1; done
+absent "$TMP/example-repo.worktrees/b2b-a" "first back-to-back removal gone"
+absent "$TMP/example-repo.worktrees/b2b-b" "second back-to-back removal gone (no nest-into-trash)"
+[[ "$(git worktree list)" != *"b2b-a"* && "$(git worktree list)" != *"b2b-b"* ]] \
+  && { print "  PASS: both back-to-back removals pruned cleanly"; ((pass++)); } \
+  || { print "  FAIL: a back-to-back removal left a dangling entry"; ((fail++)); }
+
+print "\n=== nt rm: background delete actually reclaims the disk ==="
+cd "$TMP/example-repo"; NT_NO_FETCH=1 nt drain-me >/dev/null
+mkdir -p "$TMP/example-repo.worktrees/drain-me/node_modules/pkg"   # give the bg rm real work
+print x > "$TMP/example-repo.worktrees/drain-me/node_modules/pkg/f"
+cd "$TMP/example-repo"; nt rm -f drain-me >/dev/null
+W="$TMP/example-repo.worktrees"
+for i in {1..100}; do [[ -z "$(find "$W" -name '.nt-trash-*' 2>/dev/null)" ]] && break; sleep 0.1; done
+[[ -z "$(find "$W" -name '.nt-trash-*' 2>/dev/null)" ]] \
+  && { print "  PASS: background rm drained all .nt-trash-* dirs"; ((pass++)); } \
+  || { print "  FAIL: background rm never drained the trash (deferred delete broken)"; ((fail++)); }
+
+print "\n=== nt rm <dirty> whose path has a space and a quote: refused, NOT deleted (NUL-safe guard) ==="
+# Directly create a worktree under a nasty parent dir, make it dirty, and rm by path
+# WITHOUT -f. If the parallel guard mishandled the path it would be deleted — the bug.
+cd "$TMP/example-repo"
+nasty="$TMP/example-repo.worktrees/has space-and'quote"
+git worktree add -q "$nasty/wt" -b nasty-branch >/dev/null 2>&1
+print wip > "$nasty/wt/wip.txt"                                    # untracked -> dirty
+cd "$TMP/example-repo"; nt rm "$nasty/wt" 2>/dev/null; check "dirty nasty-path rm (no -f) -> nonzero" "$?" "1"
+[[ -d "$nasty/wt" && -f "$nasty/wt/wip.txt" ]] \
+  && { print "  PASS: dirty worktree at a quoted/spaced path kept (uncommitted work safe)"; ((pass++)); } \
+  || { print "  FAIL: dirty worktree at a nasty path was deleted without -f (DATA LOSS)"; ((fail++)); }
+cd "$TMP/example-repo"; nt rm -f "$nasty/wt" >/dev/null            # cleanup
+
+print "\n=== nt rm: git-error worktree fails CLOSED (refused without -f) ==="
+# A worktree whose gitdir link is broken makes `git status` error. The guard must
+# treat that as 'refuse', never silently 'clean'.
+cd "$TMP/example-repo"; git worktree add -q "$TMP/example-repo.worktrees/broken" -b broken-branch >/dev/null 2>&1
+print "gitdir: /nonexistent/path/that/breaks/git" > "$TMP/example-repo.worktrees/broken/.git"
+cd "$TMP/example-repo"; nt rm broken 2>/dev/null; check "git-error worktree rm (no -f) -> nonzero" "$?" "1"
+[[ -d "$TMP/example-repo.worktrees/broken" ]] \
+  && { print "  PASS: un-vouchable worktree kept (delegated to git, which refuses)"; ((pass++)); } \
+  || { print "  FAIL: un-vouchable worktree deleted (fail-open!)"; ((fail++)); }
+cd "$TMP/example-repo"; rm -rf "$TMP/example-repo.worktrees/broken"   # git refuses even -f; clean up by hand
+git worktree prune 2>/dev/null; git branch -D broken-branch >/dev/null 2>&1
+
+print "\n=== nt rm a LOCKED worktree: refused even with -f (mirrors git — unlock first) ==="
+cd "$TMP/example-repo"; NT_NO_FETCH=1 nt locked-wt >/dev/null
+cd "$TMP/example-repo"; git worktree lock "$TMP/example-repo.worktrees/locked-wt"
+cd "$TMP/example-repo"; nt rm locked-wt 2>/dev/null; check "locked rm (no -f) -> nonzero" "$?" "1"
+[[ -d "$TMP/example-repo.worktrees/locked-wt" ]] \
+  && { print "  PASS: locked worktree kept without -f"; ((pass++)); } \
+  || { print "  FAIL: locked worktree removed without -f"; ((fail++)); }
+cd "$TMP/example-repo"; nt rm -f locked-wt 2>/dev/null; check "locked rm -f -> still nonzero" "$?" "1"
+[[ -d "$TMP/example-repo.worktrees/locked-wt" && "$(git worktree list)" == *"locked-wt"* ]] \
+  && { print "  PASS: -f neither destroyed nor orphaned the locked worktree"; ((pass++)); } \
+  || { print "  FAIL: -f destroyed/orphaned a locked worktree"; ((fail++)); }
+cd "$TMP/example-repo"; git worktree unlock "$TMP/example-repo.worktrees/locked-wt"; nt rm locked-wt >/dev/null
+absent "$TMP/example-repo.worktrees/locked-wt" "removed cleanly after an explicit unlock"
+
+print "\n=== nt rm a worktree containing a submodule: refused without -f even when CLEAN ==="
+# git refuses to remove ANY worktree with a submodule (its per-worktree objects would
+# be lost); nt must mirror that, not silently fast-delete a clean-but-submodule tree.
+cd "$TMP/example-repo"; NT_NO_FETCH=1 nt sub-host >/dev/null
+subwt="$TMP/example-repo.worktrees/sub-host"
+git -C "$subwt" -c protocol.file.allow=always submodule add -q "$TMP/remote.git" sub 2>/dev/null
+if [[ -f "$subwt/.gitmodules" ]]; then
+  git -C "$subwt" commit -qm addsub 2>/dev/null                     # CLEAN worktree, just has a submodule
+  cd "$TMP/example-repo"; nt rm sub-host 2>/dev/null; check "clean-submodule rm (no -f) -> nonzero" "$?" "1"
+  [[ -d "$subwt" ]] \
+    && { print "  PASS: clean submodule worktree kept without -f (submodule objects safe)"; ((pass++)); } \
+    || { print "  FAIL: clean submodule worktree deleted without -f (DATA LOSS)"; ((fail++)); }
+  cd "$TMP/example-repo"; nt rm -f sub-host >/dev/null; check "submodule rm -f -> 0 (delegated to git)" "$?" "0"
+  absent "$subwt" "submodule worktree removed with -f"
+else
+  print "  SKIP: submodule add unavailable in this environment"
+fi
+
+print "\n=== nt rm a worktree with a gitlink but NO .gitmodules: refused without -f ==="
+# `git add <nested-repo>` records a mode-160000 gitlink with no .gitmodules; status is
+# clean, yet git refuses to remove it. nt must detect the gitlink (not just .gitmodules)
+# or it would fast-delete the embedded repo's objects.
+cd "$TMP/example-repo"; NT_NO_FETCH=1 nt gitlink-host >/dev/null
+glwt="$TMP/example-repo.worktrees/gitlink-host"
+( cd "$glwt" && git init -q -b main nested && cd nested && print y > g && git add -A && git commit -qm n ) >/dev/null 2>&1
+git -C "$glwt" add nested >/dev/null 2>&1
+git -C "$glwt" commit -qm "embed nested repo" >/dev/null 2>&1
+if git -C "$glwt" ls-files -s 2>/dev/null | grep -q '^160000 '; then
+  [[ ! -f "$glwt/.gitmodules" ]] \
+    && { print "  PASS: setup has a gitlink and no .gitmodules"; ((pass++)); } \
+    || { print "  FAIL: setup unexpectedly has .gitmodules"; ((fail++)); }
+  cd "$TMP/example-repo"; nt rm gitlink-host 2>/dev/null; check "gitlink rm (no -f) -> nonzero" "$?" "1"
+  [[ -d "$glwt/nested/.git" ]] \
+    && { print "  PASS: embedded repo kept without -f (gitlink detected via the index)"; ((pass++)); } \
+    || { print "  FAIL: embedded repo destroyed without -f (DATA LOSS)"; ((fail++)); }
+  cd "$TMP/example-repo"; nt rm -f gitlink-host >/dev/null   # cleanup (git --force handles it)
+else
+  print "  SKIP: could not set up a gitlink worktree"
+fi
+
+print "\n=== nt rm a parent worktree AND its nested child in one batch: honest exit code ==="
+# A worktree nested inside another (reachable via branches 'p' and 'p/child'): removing
+# the parent drags the child, so the child's own removal must report success, not failure.
+cd "$TMP/example-repo"; NT_NO_FETCH=1 nt nestp >/dev/null
+git worktree add -q "$TMP/example-repo.worktrees/nestp/child" -b nestp-child >/dev/null 2>&1
+cd "$TMP/example-repo"; nt rm -f "$TMP/example-repo.worktrees/nestp" "$TMP/example-repo.worktrees/nestp/child" >/dev/null 2>&1
+check "nested parent+child rm -f -> 0 (no false failure)" "$?" "0"
+for i in {1..50}; do [[ -z "$(find "$TMP/example-repo.worktrees" -name '.nt-trash-*' 2>/dev/null)" ]] && break; sleep 0.1; done
+[[ "$(git worktree list)" != *"nestp"* ]] \
+  && { print "  PASS: both parent and nested child gone, no dangling entry"; ((pass++)); } \
+  || { print "  FAIL: a nested worktree entry was left dangling"; ((fail++)); }
+git fsck --connectivity-only >/dev/null 2>&1 \
+  && { print "  PASS: repo fsck clean after nested removal"; ((pass++)); } \
+  || { print "  FAIL: fsck problem after nested removal"; ((fail++)); }
 
 print "\n=== nt ls: dirty marker + legend + in-sync ==="
 # LC_ALL=C.UTF-8 pins the up/down glyphs to arrows so the assertions are locale-independent.
@@ -193,6 +373,16 @@ cd "$TMP/example-repo"; nt rm nest-ns/leaf >/dev/null   # leaves an empty nest-n
 [[ -d "$TMP/example-repo.worktrees/nest-ns" ]] && { print "  PASS: empty nest-ns/ dir present pre-prune"; ((pass++)); } || { print "  FAIL: setup"; ((fail++)); }
 nt prune </dev/null >/dev/null                          # </dev/null: non-tty -> no interactive branch deletion
 absent "$TMP/example-repo.worktrees/nest-ns" "prune removed the empty nest-ns/ dir"
+
+print "\n=== nt prune: reaps abandoned 'nt rm' trash (interrupted background delete) ==="
+# Simulate a background delete that never finished: a .nt-trash-* dir with content,
+# sitting in an otherwise-empty nested parent.
+cd "$TMP/example-repo"
+mkdir -p "$TMP/example-repo.worktrees/abandoned/.nt-trash-999-0/node_modules"
+print junk > "$TMP/example-repo.worktrees/abandoned/.nt-trash-999-0/node_modules/x"
+nt prune </dev/null >/dev/null
+absent "$TMP/example-repo.worktrees/abandoned/.nt-trash-999-0" "prune reaped the abandoned trash dir"
+absent "$TMP/example-repo.worktrees/abandoned" "prune then swept the now-empty parent"
 
 print "\n=== nt prune: stale (deleted-on-disk) worktree entry ==="
 cd "$TMP/example-repo"; NT_NO_FETCH=1 nt stale-wt >/dev/null
