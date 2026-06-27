@@ -1,5 +1,6 @@
 # goreleaser config for nt. Authored now; releases are cut later (see plan §5).
-# Validate locally with:  goreleaser build --snapshot --clean
+# The first Go release continues the existing version line: tag it **v0.0.2**
+# (the zsh plugin was v0.0.1). Validate locally with: goreleaser build --snapshot --clean
 version: 2
 
 project_name: nt
