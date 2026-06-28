@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -27,11 +26,12 @@ func newDoneCmd() *cobra.Command {
 			}
 			r := loadRepo()
 
-			dforce := false
-			if len(args) > 0 && (args[0] == "-f" || args[0] == "--force") {
-				dforce = true
-				args = args[1:]
-			}
+			// Accept -f/--force anywhere among the args, exactly like `nt rm` (the
+			// zsh original only honored a leading -f for done — an inconsistency, so
+			// `nt done feature -f` silently dropped the force).
+			force, rest := splitForce(args)
+			dforce := force != ""
+			args = rest
 
 			var target string
 			if len(args) > 0 {
@@ -65,10 +65,10 @@ func newDoneCmd() *cobra.Command {
 
 			doneb := r.BranchAt(target)
 
-			// Step out of the tree before removing it.
-			if pwd := currentDir(); pwd == target || strings.HasPrefix(pwd, target+string(os.PathSeparator)) {
-				shell.SignalCD(r.MainDir)
-			}
+			// Remember whether we're standing inside the tree; only actually step
+			// out once git confirms the removal — a refused removal (e.g. a dirty
+			// worktree without -f) must leave the shell where it is.
+			inTree := insideDir(currentDir(), target)
 
 			rmArgs := []string{"worktree", "remove"}
 			if dforce {
@@ -77,6 +77,9 @@ func newDoneCmd() *cobra.Command {
 			rmArgs = append(rmArgs, target)
 			if !git.Run(r.MainDir, rmArgs...) {
 				os.Exit(1)
+			}
+			if inTree {
+				shell.SignalCD(r.MainDir)
 			}
 			info("removed %s", target)
 
@@ -93,7 +96,9 @@ func newDoneCmd() *cobra.Command {
 			if git.RunQuiet(r.MainDir, "branch", delFlag, doneb) {
 				info("deleted branch %s  (was %s — recover via git reflog)", doneb, sha)
 			} else {
-				fail("branch '%s' not fully merged — kept. Use 'nt done -f %s' or 'git branch -D %s'.", doneb, doneb, doneb)
+				// The worktree is already gone, so `nt done -f <branch>` can no
+				// longer resolve it; point only at the recovery that still works.
+				fail("branch '%s' not fully merged — kept. Force-delete with 'git branch -D %s'.", doneb, doneb)
 			}
 			return nil
 		},

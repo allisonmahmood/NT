@@ -75,8 +75,14 @@ func Load() (*Repo, error) {
 	}
 	main := wts[0].Path
 	root := config.RootOverride()
-	if root == "" {
+	switch {
+	case root == "":
 		root = filepath.Join(filepath.Dir(main), filepath.Base(main)+".worktrees")
+	case !filepath.IsAbs(root):
+		// Anchor a relative NT_ROOT to the main checkout (git's own CWD for
+		// `worktree add`), so the existence check, git, and the cd-handoff all
+		// resolve the destination to the same absolute path.
+		root = filepath.Join(main, root)
 	}
 	return &Repo{MainDir: main, Root: root, Worktrees: wts}, nil
 }

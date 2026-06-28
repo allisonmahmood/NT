@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -69,8 +68,8 @@ func newRmCmd() *cobra.Command {
 				return nil
 			}
 
-			// Step out of any tree we're about to remove (the bg delete can't cd
-			// for us); keep the main-checkout guard as a backstop.
+			// Note whether we're standing in a tree we're about to remove (the bg
+			// delete can't cd for us); keep the main-checkout guard as a backstop.
 			pwd := currentDir()
 			var doomed []string
 			stepOut := false
@@ -79,7 +78,7 @@ func newRmCmd() *cobra.Command {
 					warn("refusing to remove the main checkout")
 					continue
 				}
-				if pwd == t || strings.HasPrefix(pwd, t+string(os.PathSeparator)) {
+				if insideDir(pwd, t) {
 					stepOut = true
 				}
 				doomed = append(doomed, t)
@@ -87,11 +86,14 @@ func newRmCmd() *cobra.Command {
 			if len(doomed) == 0 {
 				os.Exit(1)
 			}
-			if stepOut {
+
+			rc := removeWorktrees(force, r.MainDir, doomed)
+			// Relocate only once the tree we were standing in is actually gone — a
+			// refused removal must leave the shell where it is, not yank it to main.
+			if stepOut && !pathExists(pwd) {
 				shell.SignalCD(r.MainDir)
 			}
-
-			if rc := removeWorktrees(force, r.MainDir, doomed); rc != 0 {
+			if rc != 0 {
 				os.Exit(rc)
 			}
 			return nil

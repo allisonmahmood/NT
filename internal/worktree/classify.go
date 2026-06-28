@@ -51,7 +51,7 @@ func isSimple(force, wt string) bool {
 		return false // locked
 	}
 	if ls, ok := git.Query(wt, "ls-files", "-s"); ok {
-		for _, line := range strings.Split(ls, "\n") {
+		for _, line := range git.Lines(ls) {
 			if strings.HasPrefix(line, "160000 ") {
 				return false // submodule / gitlink
 			}

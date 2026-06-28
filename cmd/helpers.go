@@ -3,6 +3,8 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/allisonmahmood/nt/internal/worktree"
 )
@@ -43,4 +45,19 @@ func currentDir() string {
 		return wd
 	}
 	return os.Getenv("PWD")
+}
+
+// insideDir reports whether the shell's cwd is at or below dir — the step-out
+// test shared by rm and done. It resolves symlinks on the cwd first so a
+// worktree reached through a symlinked path (e.g. macOS /tmp -> /private/tmp)
+// still matches git's canonical worktree path; without this the prefix check
+// silently misses and the shell is left inside a just-deleted directory.
+func insideDir(pwd, dir string) bool {
+	if pwd == "" {
+		return false
+	}
+	if rp, err := filepath.EvalSymlinks(pwd); err == nil {
+		pwd = rp
+	}
+	return pwd == dir || strings.HasPrefix(pwd, dir+string(os.PathSeparator))
 }

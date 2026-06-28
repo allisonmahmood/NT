@@ -35,7 +35,10 @@ func runCreate(r *worktree.Repo, args []string) {
 	}
 	if remote != "" && !config.NoFetch() {
 		info("fetching %s ...", remote)
-		if !git.RunQuiet(r.MainDir, "fetch", "--quiet", remote) {
+		// Run (not RunQuiet) so git's own stderr (auth/network diagnostics) reaches
+		// the terminal on failure, as the zsh original did; --quiet keeps success
+		// silent.
+		if !git.Run(r.MainDir, "fetch", "--quiet", remote) {
 			warn("warning: fetch failed, using cached refs")
 		}
 	}
@@ -43,7 +46,9 @@ func runCreate(r *worktree.Repo, args []string) {
 	defaultBranch := ""
 	if remote != "" {
 		if ref, ok := git.Query(r.MainDir, "symbolic-ref", "--quiet", "refs/remotes/"+remote+"/HEAD"); ok {
-			defaultBranch = ref[strings.LastIndexByte(ref, '/')+1:]
+			// Strip the full "refs/remotes/<remote>/" prefix, not just up to the
+			// last '/', so a slashed default branch (e.g. release/v2) survives.
+			defaultBranch = strings.TrimPrefix(ref, "refs/remotes/"+remote+"/")
 		}
 	}
 	if defaultBranch == "" {
@@ -63,7 +68,7 @@ func runCreate(r *worktree.Repo, args []string) {
 		fail("target path already exists: %s", dest)
 	}
 	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
-		os.Exit(1)
+		fail("could not create worktrees dir %s: %v", filepath.Dir(dest), err)
 	}
 
 	hasLocal := git.OK(r.MainDir, "show-ref", "--quiet", "--verify", "refs/heads/"+branch)
