@@ -1,0 +1,25 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  enable:
+    - misspell
+    - unconvert
+    - revive
+  settings:
+    revive:
+      rules:
+        # cobra RunE/ValidArgsFunction signatures legitimately ignore some params.
+        - name: unused-parameter
+          disabled: true
+  exclusions:
+    rules:
+      # Writes to stdout/stderr: a failed write isn't actionable here.
+      - linters: [errcheck]
+        source: "fmt.Fprint"
+
+formatters:
+  enable:
+    - gofmt

@@ -1,0 +1,21 @@
+# rm renames the tree aside immediately (deferred delete) and prunes the entry
+exec git init -q -b main repo
+cd repo
+exec git commit -q --allow-empty -m init
+exec nt feature
+exists ../repo.worktrees/feature
+
+exec nt rm feature
+stdout 'removed'
+# the original path is gone the instant rm returns (renamed aside)
+! exists ../repo.worktrees/feature
+exec git worktree list
+! stdout 'feature'
+
+# removing the main checkout is refused
+! exec nt rm main
+stderr 'refusing to remove the main checkout'
+
+# an unknown target removes nothing
+! exec nt rm no-such-worktree
+stderr 'no worktree for branch or path'
