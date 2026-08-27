@@ -1,0 +1,10 @@
+{
+  "github_owned_allowed": false,
+  "verified_allowed": false,
+  "patterns_allowed": [
+    "actions/checkout@*",
+    "actions/setup-go@*",
+    "golangci/golangci-lint-action@*",
+    "goreleaser/goreleaser-action@*"
+  ]
+}

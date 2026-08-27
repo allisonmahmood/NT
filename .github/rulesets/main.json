@@ -48,19 +48,19 @@
             "integration_id": 15368
           },
           {
-            "context": "test (ubuntu-latest, stable)",
+            "context": "test (ubuntu-latest, 1.27.0)",
             "integration_id": 15368
           },
           {
-            "context": "test (ubuntu-latest, oldstable)",
+            "context": "test (ubuntu-latest, 1.26.7)",
             "integration_id": 15368
           },
           {
-            "context": "test (macos-latest, stable)",
+            "context": "test (macos-latest, 1.27.0)",
             "integration_id": 15368
           },
           {
-            "context": "test (macos-latest, oldstable)",
+            "context": "test (macos-latest, 1.26.7)",
             "integration_id": 15368
           },
           {
