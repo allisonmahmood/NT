@@ -1,15 +1,14 @@
 # nt — navigate tree
 
 Git worktrees, minus the ceremony. `nt` (short for **navigate tree**) is a tiny
-zsh command for hopping around worktrees: it spins one up — or jumps to it if it
-already exists — `cd`s you in, and gets out of your way.
+cross-shell command for hopping around worktrees: it spins one up — or jumps to
+it if it already exists — `cd`s you in, and gets out of your way.
 
 ```sh
 nt fix-login   # worktree up, cd'd in, go
 ```
 
-Honestly? You should just ask your agent to build this for you — it's a 20-minute
-job. But if you're too scared to let it loose on your dotfiles, here you go.
+A single Go binary plus a one-line shell hook. Works in **zsh, bash, and fish**.
 
 ## Where the trees live
 
@@ -26,23 +25,46 @@ no scattering them across `/tmp`, no losing track of where they went:
 
 ## Install
 
+Grab the binary, then add one line to your shell rc:
+
 ```sh
-# clone is already at ~/Developer/nt
-echo 'source ~/Developer/nt/nt.plugin.zsh' >> ~/.zshrc
-exec zsh        # or open a new tab
+# Go toolchain:
+go install github.com/allisonmahmood/nt@latest
+
+# …or build from a clone:
+git clone https://github.com/allisonmahmood/nt && cd nt && go build -o ~/bin/nt .
 ```
 
-That one `source` line defines the `nt` command **and** wires up tab completion
-(it adds `completions/` to `fpath` and registers `_nt`, even when compinit has
-already run — as it has under oh-my-zsh). One line. Done.
+Then wire up the shell integration (defines the `nt` command **and** tab completion):
+
+```sh
+# ~/.zshrc
+eval "$(nt init zsh)"
+
+# ~/.bashrc
+eval "$(nt init bash)"
+
+# ~/.config/fish/config.fish
+nt init fish | source
+```
+
+### Why a shell hook?
+
+`nt`'s whole job is to **`cd` your shell** into a worktree — and a child process
+can't change its parent shell's directory. So `nt` is a binary *plus* a thin shell
+function (the [zoxide](https://github.com/ajeetdsouza/zoxide) model). The binary
+writes its target directory to a temp file named in `$NT_CD_FILE`; the function
+reads it and does the `cd`. Rich output (the `ls` table, status lines) stays on
+stdout, and paths with spaces or quotes round-trip as raw bytes — no `eval`, no
+quoting games.
 
 ## Usage
 
 | Command | What it does |
 |---|---|
 | `nt <branch> [base]` | spin up / jump to a worktree and `cd` in |
-| `nt cd [branch]` | `cd` to an existing worktree (fzf picker if no branch) |
-| `nt rm [-f] [target...]` | nuke worktree(s) (fzf multi-picker if no target) |
+| `nt cd [branch]` | `cd` to an existing worktree (picker if branch omitted) |
+| `nt rm [-f] [target...]` | nuke worktree(s) (multi-picker if no target) |
 | `nt done [-f] [target]` | nuke a worktree **and** delete its local branch |
 | `nt prune` | tidy up: drop stale worktrees + empty dirs, offer to delete gone branches |
 | `nt home` | `cd` back to the main checkout, wherever you are |
@@ -64,30 +86,25 @@ local copy:
 - **already has a worktree** → skips the theatrics and `cd`s you there
 - `nt <name> <base>` → fork the new branch off an explicit base instead
 
-(The `-h` text says exactly where new branches fork from — `latest origin/main`,
-or your actual remote/default, or `main (no remote)` — so it never lies to you.)
-
 ### Housekeeping
-
-When you're done with a branch, or the worktree dir has filled up with stuff
-you've long since merged:
 
 - **`nt rm [target...]`** → remove worktree(s), **fast**. Deleting a worktree is
   mostly the cost of `rm`-ing its working tree (a fat `node_modules` can take
   seconds *each*), so `nt rm` renames each tree aside instantly and reclaims the
-  disk in the background — it returns at once even when you nuke ten heavy trees.
-  Same safety as `git worktree remove`: it refuses a dirty or locked worktree (and
-  anything git can't vouch for) unless you pass `-f`. No target → fzf multi-picker.
+  disk in a background process — it returns at once even when you nuke ten heavy
+  trees. Same safety as `git worktree remove`: it refuses a dirty or locked
+  worktree (and anything git can't vouch for) unless you pass `-f`. No target → a
+  multi-select picker.
 - **`nt done [target]`** → remove the worktree **and** delete its local branch in
   one move. Safe by default (`git branch -d` refuses an unmerged branch and keeps
-  it, telling you so); `nt done -f` forces both the removal and the delete. No
-  target → fzf picker. Detached worktree? It just removes it (no branch to delete).
-- **`nt prune`** → `git worktree prune` to clear stale entries, sweep up the empty
-  `team/`-style parent dirs git leaves behind, then — if any local branches have a
-  **gone upstream** (merged & deleted on origin) — pop an fzf picker to clean them:
-  **enter** on the `[ALL]` row deletes them all, or **space** to mark just the ones
-  you want. Run `git fetch -p` first so "gone" is accurate. In a non-interactive
-  shell it only *lists* the gone branches — it never deletes without you there.
+  it, telling you so); `nt done -f` forces both. Detached worktree? It just removes
+  it (no branch to delete).
+- **`nt prune`** → drop stale worktree entries, sweep up the empty `team/`-style
+  parent dirs git leaves behind, reap any leftover background-delete trash, then —
+  if any local branches have a **gone upstream** (merged & deleted on origin) —
+  offer to clean them. Run `git fetch -p` first so "gone" is accurate. In a
+  non-interactive shell it only *lists* the gone branches — it never deletes
+  without you there.
 
 ### A nicer `nt ls`
 
@@ -101,20 +118,20 @@ you've long since merged:
 * = uncommitted changes
 ```
 
-(The main checkout always lists first, and the branch column shows the full
-short name — `team/issue-123`, not just the leaf.)
-
 `*` = uncommitted changes, `↑n`/`↓n` = ahead/behind the upstream, `=` = in sync,
-`-` = no upstream, `?` = the dir is gone (a `nt prune` candidate). In a non-UTF-8
-locale the arrows degrade to `^n`/`vn` so the columns still line up.
+`-` = no upstream, `gone` = upstream deleted, `?` = the dir is gone (a `nt prune`
+candidate). The main checkout always lists first, columns are aligned, and color
+is used only on a real terminal (`NO_COLOR` is honored). In a non-UTF-8 locale the
+arrows degrade to `^n`/`vn` so the columns still line up.
 
 ### Tab completion
 
-- `nt <tab>` → subcommands (`cd` / `rm` / `done` / `prune` / `home` / `ls`) plus existing branch names
+Completion is generated by the binary and works across zsh/bash/fish:
+
+- `nt <tab>` → subcommands plus existing branch names
 - `nt cd <tab>` → branches that currently have a worktree
-- `nt rm <tab>` / `nt done <tab>` → every worktree except the main checkout, plus `-f`.
-  Branch-backed worktrees show by branch name; branch-less (detached) ones — say,
-  created by some other tool — show by full path so they're still reachable.
+- `nt rm <tab>` / `nt done <tab>` → every worktree except the main checkout (by
+  branch name, or full path for detached ones), plus `-f`
 - `nt <branch> <tab>` → branches, to pick a base
 
 ## Notes & knobs
@@ -122,43 +139,31 @@ locale the arrows degrade to `^n`/`vn` so the columns still line up.
 - New branches are created `--no-track`, so a stray `git push`/`git pull` won't
   accidentally nuke `main`. Push with `-u` when you're ready.
 - `NT_NO_FETCH=1 nt foo` skips the network fetch (offline, or just impatient).
-- A local branch is only ever fast-forwarded to origin when it's a clean FF —
-  your diverged local commits are never touched.
-- `nt rm [target...]` (and `nt done <target>`) take a branch name, a full worktree
-  path, or a unique path tail (the last path component, usually). `nt rm` takes
-  several at once (`nt rm fix-login spike`, and `-f` may go anywhere) — it resolves
-  the whole list up front and removes **nothing** unless *every* target checks out:
-  an ambiguous tail is refused with the matches listed, and naming the main checkout
-  aborts the batch too. No target → an fzf **multi-picker**: **space** to mark each
-  worktree you want gone, **enter** to remove them all (no marks = just the
-  highlighted row), over every worktree but the main checkout. Either way it flat-out
-  refuses to remove the main checkout, and if you `rm`/`done` the worktree you're
-  standing in, it steps you back home first.
-- `nt rm` frees the disk **asynchronously**: it renames each tree to a hidden
-  `.nt-trash-*` dir next to it and `rm`s that in a disowned background job, so the
-  command returns instantly. `nt prune` reaps any `.nt-trash-*` a killed delete left
-  behind (handy after a reboot mid-delete). One caveat: that reaper only sweeps under
-  `<repo>.worktrees/`, so trash left beside a worktree you keep *elsewhere* (e.g. one
-  another tool created outside that dir) won't be auto-reaped — `find ~ -name '.nt-trash-*'`
-  clears it. The fast path only handles worktrees `nt` can confirm are simple (clean,
-  unlocked, no submodule); a dirty, **locked**, or submodule-containing worktree is
-  handed to `git worktree remove` itself, so it behaves exactly as git does — refused
-  without `-f`, and a lock still needs an explicit `git worktree unlock` (git won't drop
-  a lock on a single `-f`).
-- The interactive pickers (`nt cd`/`nt rm`/`nt done` with no argument, and the
-  `nt prune` branch cleanup) need [`fzf`](https://github.com/junegunn/fzf). Without
-  it you get a one-line "fzf required …" nudge instead of a cryptic error — just
-  pass an explicit branch/target and everything else works fzf-free.
-- Worktree location is one line in `nt.plugin.zsh` — change it if you hate it:
-  `root="${main_dir:h}/${repo_name}.worktrees"`.
+- `NT_ROOT=/path nt …` overrides where worktrees live (default `<repo>.worktrees`).
+- `NT_REMOTE=upstream nt …` fetches/tracks against a remote other than `origin`.
+- `nt rm`/`nt done` take a branch name, a full worktree path, or a unique trailing
+  path segment. `nt rm` takes several at once (`-f` may go anywhere) — it resolves
+  the whole list up front and removes **nothing** unless *every* target checks out
+  (an ambiguous tail is refused with the matches listed; naming the main checkout
+  aborts the batch). It flat-out refuses to remove the main checkout, and if you
+  `rm`/`done` the worktree you're standing in, it steps you back home first.
+- The fast deferred delete only handles worktrees `nt` can confirm are simple
+  (clean, unlocked, no submodule); a dirty, **locked**, or submodule-containing
+  worktree is handed to `git worktree remove` itself, so it behaves exactly as git
+  does. `nt prune` reaps any `.nt-trash-*` a killed delete left behind (handy after
+  a reboot mid-delete).
+- The interactive pickers are built in — **no `fzf` dependency**. In a
+  non-interactive shell, just pass an explicit branch/target.
 
 ## Tests
 
 ```sh
-zsh test/run.zsh
+go test ./...            # unit + end-to-end (testscript) — no shell needed
+zsh test/parity/run.zsh  # behavioral parity oracle: drives the binary through a real zsh shim
 ```
 
-- `test/test_nt.zsh` — end-to-end behaviour against throwaway repos
-- `test/test_completion.zsh` — completion registration + candidate generation
+The parity suite is the behavioral spec: ~100 assertions that exercise the binary
+through the actual `nt init zsh` cd-shim, so "works the same way" is *proven*, not
+claimed. CI runs all of it on Linux and macOS.
 
 MIT.

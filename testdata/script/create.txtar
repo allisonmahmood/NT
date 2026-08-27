@@ -1,0 +1,28 @@
+# create a new worktree off main, and signal the cd via $NT_CD_FILE
+exec git init -q -b main repo
+cd repo
+exec git commit -q --allow-empty -m init
+
+env NT_CD_FILE=$WORK/cdfile
+exec nt feature
+stdout 'new branch'
+stdout '→'
+exists $WORK/cdfile
+grep 'repo\.worktrees' $WORK/cdfile
+exists ../repo.worktrees/feature
+
+# re-running for an existing branch just cds — no duplicate worktree
+env NT_CD_FILE=$WORK/cdfile2
+exec nt feature
+stdout 'already exists'
+exists $WORK/cdfile2
+
+# ls shows the worktree and the legend
+exec nt ls
+stdout 'feature'
+stdout 'uncommitted changes'
+
+# bare nt prints the hint header + ls, exit 0
+exec nt
+stdout 'nt cd'
+stdout 'feature'

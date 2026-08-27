@@ -1,0 +1,65 @@
+# goreleaser config for nt. Authored now; releases are cut later (see plan §5).
+# The first Go release continues the existing version line: tag it **v0.0.2**
+# (the zsh plugin was v0.0.1). Validate locally with: goreleaser build --snapshot --clean
+version: 2
+
+project_name: nt
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: nt
+    main: .
+    binary: nt
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: nt
+    formats: [tar.gz]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    files:
+      - README.md
+      - LICENSE
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot"
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+# --- Distribution (wired now, activated when the first tag is pushed) ---------
+# Uncomment once the tap repo + GH_PAT secret exist (plan §9.5):
+#
+# brews:
+#   - name: nt
+#     repository:
+#       owner: allisonmahmood
+#       name: homebrew-nt
+#     homepage: "https://github.com/allisonmahmood/nt"
+#     description: "Git worktrees, minus the ceremony"
+#     license: "MIT"
+#     install: |
+#       bin.install "nt"
+#     test: |
+#       system "#{bin}/nt", "--version"

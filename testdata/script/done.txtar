@@ -1,0 +1,12 @@
+# done removes the worktree AND deletes its (merged) local branch
+exec git init -q -b main repo
+cd repo
+exec git commit -q --allow-empty -m init
+exec nt feature
+
+exec nt done feature
+stdout 'removed'
+stdout 'deleted branch feature'
+stdout 'recover via git reflog'
+! exists ../repo.worktrees/feature
+! exec git show-ref --verify --quiet refs/heads/feature

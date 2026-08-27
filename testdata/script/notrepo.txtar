@@ -1,0 +1,13 @@
+# outside a git repo, every worktree command errors with a clear message
+! exec nt foo
+stderr 'not inside a git repository'
+
+! exec nt ls
+stderr 'not inside a git repository'
+
+! exec nt cd whatever
+stderr 'not inside a git repository'
+
+# init works OUTSIDE a repo (it runs in your rc file)
+exec nt init zsh
+stdout 'nt\(\)'
