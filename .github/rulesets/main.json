@@ -1,0 +1,83 @@
+{
+  "name": "Protect main",
+  "target": "branch",
+  "enforcement": "active",
+  "bypass_actors": [
+    {
+      "actor_id": 5,
+      "actor_type": "RepositoryRole",
+      "bypass_mode": "always"
+    }
+  ],
+  "conditions": {
+    "ref_name": {
+      "include": [
+        "refs/heads/main"
+      ],
+      "exclude": []
+    }
+  },
+  "rules": [
+    {
+      "type": "deletion"
+    },
+    {
+      "type": "non_fast_forward"
+    },
+    {
+      "type": "pull_request",
+      "parameters": {
+        "allowed_merge_methods": [
+          "merge",
+          "squash",
+          "rebase"
+        ],
+        "dismiss_stale_reviews_on_push": false,
+        "require_code_owner_review": false,
+        "require_last_push_approval": false,
+        "required_approving_review_count": 0,
+        "required_review_thread_resolution": false
+      }
+    },
+    {
+      "type": "required_status_checks",
+      "parameters": {
+        "required_status_checks": [
+          {
+            "context": "lint",
+            "integration_id": 15368
+          },
+          {
+            "context": "test (ubuntu-latest, stable)",
+            "integration_id": 15368
+          },
+          {
+            "context": "test (ubuntu-latest, oldstable)",
+            "integration_id": 15368
+          },
+          {
+            "context": "test (macos-latest, stable)",
+            "integration_id": 15368
+          },
+          {
+            "context": "test (macos-latest, oldstable)",
+            "integration_id": 15368
+          },
+          {
+            "context": "parity (ubuntu-latest)",
+            "integration_id": 15368
+          },
+          {
+            "context": "parity (macos-latest)",
+            "integration_id": 15368
+          },
+          {
+            "context": "build-snapshot",
+            "integration_id": 15368
+          }
+        ],
+        "strict_required_status_checks_policy": true
+      }
+    }
+  ]
+}
