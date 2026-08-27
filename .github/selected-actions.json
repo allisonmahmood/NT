@@ -3,6 +3,7 @@
   "verified_allowed": false,
   "patterns_allowed": [
     "actions/checkout@*",
+    "actions/dependency-review-action@*",
     "actions/setup-go@*",
     "golangci/golangci-lint-action@*",
     "goreleaser/goreleaser-action@*"
