@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -107,7 +108,7 @@ func newRmCmd() *cobra.Command {
 // is refused before either path can destroy the child. Returns 0, or 1 if any tree
 // was refused/failed.
 func removeWorktrees(force string, r *worktree.Repo, targets []string) int {
-	blockers := unnamedNestedWorktrees(r.Worktrees, targets)
+	blockers := unnamedNestedBlockers(r.Worktrees, targets)
 	candidates := make([]string, 0, len(targets))
 	rc := 0
 	for _, t := range targets {
@@ -176,7 +177,9 @@ func removeWorktrees(force string, r *worktree.Repo, targets []string) int {
 	return rc
 }
 
-func unnamedNestedWorktrees(registered []worktree.Worktree, targets []string) map[string][]string {
+// unnamedNestedBlockers returns the registered, present child worktrees below
+// each target that were omitted from the same removal request.
+func unnamedNestedBlockers(registered []worktree.Worktree, targets []string) map[string][]string {
 	selected := make(map[string]bool, len(targets))
 	for _, target := range targets {
 		selected[target] = true
@@ -184,16 +187,15 @@ func unnamedNestedWorktrees(registered []worktree.Worktree, targets []string) ma
 
 	blockers := make(map[string][]string)
 	for _, target := range targets {
+		prefix := target + string(os.PathSeparator)
 		for _, candidate := range registered {
-			if candidate.Path == target || selected[candidate.Path] {
+			if selected[candidate.Path] || !strings.HasPrefix(candidate.Path, prefix) {
 				continue
 			}
 			if _, err := os.Lstat(candidate.Path); os.IsNotExist(err) {
 				continue
 			}
-			if insideDir(candidate.Path, target) {
-				blockers[target] = append(blockers[target], candidate.Path)
-			}
+			blockers[target] = append(blockers[target], candidate.Path)
 		}
 	}
 	return blockers
