@@ -1,0 +1,23 @@
+# prune fetches and prunes remote refs before detecting gone-upstream branches
+exec git init -q --bare remote.git
+exec git init -q -b main repo
+cd repo
+exec git commit -q --allow-empty -m init
+exec git remote add origin ../remote.git
+exec git push -q -u origin main
+exec git switch -q -c feature
+exec git commit -q --allow-empty -m feature
+exec git push -q -u origin feature
+exec git switch -q main
+
+# Delete the remote branch without updating the local tracking ref.
+exec git --git-dir=../remote.git update-ref -d refs/heads/feature
+exec git show-ref --verify --quiet refs/remotes/origin/feature
+
+# nt prune refreshes refs, detects the gone upstream, and only lists it without a TTY.
+env NT_NO_FETCH=
+exec nt prune
+stdout 'fetching origin'
+stdout 'feature'
+! exec git show-ref --verify --quiet refs/remotes/origin/feature
+exec git show-ref --verify --quiet refs/heads/feature

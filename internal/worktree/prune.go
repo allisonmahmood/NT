@@ -103,8 +103,8 @@ func dirExists(p string) bool {
 }
 
 // GoneBranches lists local branches whose upstream is gone (deleted on the
-// remote) — the branches `nt prune` offers to delete. Needs an up-to-date
-// `git fetch -p` to be accurate.
+// remote) — the branches `nt prune` offers to delete. The caller must fetch with
+// pruning first for the result to reflect the remote's current branches.
 func GoneBranches() []string {
 	out, ok := git.Query("", "for-each-ref", "--format=%(refname:short) %(upstream:track)", "refs/heads")
 	if !ok {

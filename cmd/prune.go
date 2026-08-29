@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
+	"github.com/allisonmahmood/nt/internal/config"
 	"github.com/allisonmahmood/nt/internal/git"
 	"github.com/allisonmahmood/nt/internal/ui"
 	"github.com/allisonmahmood/nt/internal/worktree"
@@ -22,22 +23,29 @@ func newPruneCmd() *cobra.Command {
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			r := loadRepo()
+			remote := config.Remote()
+			if !config.NoFetch() && git.OK(r.MainDir, "remote", "get-url", remote) {
+				info("fetching %s ...", remote)
+				if !git.Run(r.MainDir, "fetch", "--quiet", "--prune", remote) {
+					warn("warning: fetch failed, using cached refs")
+				}
+			}
 
-			// 1) Drop stale worktree admin entries (dirs that vanished from disk).
+			// Drop stale worktree admin entries (dirs that vanished from disk).
 			git.RunQuiet(r.MainDir, "worktree", "prune")
-			// 2) Reap abandoned trash + remove empty parent dirs (skipping live trees).
+			// Reap abandoned trash + remove empty parent dirs (skipping live trees).
 			removed := worktree.PruneDirs(r.Root, worktree.LivePaths())
 			info("pruned stale worktree entries; removed %d empty dir(s)", removed)
 
-			// 3) Offer to delete local branches whose upstream is gone.
+			// Offer to delete local branches whose upstream is gone.
 			gone := worktree.GoneBranches()
 			if len(gone) == 0 {
-				info("no gone-upstream branches (run 'git fetch -p' first if you expected some)")
+				info("no gone-upstream branches")
 				return nil
 			}
 			// No terminal to drive the picker (script, CI): list, never delete.
 			if !term.IsTerminal(int(os.Stdin.Fd())) {
-				info("local branches with a gone upstream (run 'nt prune' interactively to delete; 'git fetch -p' to refresh):")
+				info("local branches with a gone upstream (run 'nt prune' interactively to delete):")
 				for _, b := range gone {
 					fmt.Printf("  %s\n", b)
 				}
