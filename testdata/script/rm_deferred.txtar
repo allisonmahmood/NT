@@ -19,3 +19,26 @@ stderr 'refusing to remove the main checkout'
 # an unknown target removes nothing
 ! exec nt rm no-such-worktree
 stderr 'no worktree for branch or path'
+
+# forcing a parent removal refuses an unnamed nested worktree
+exec nt nestp
+exec git worktree add -q ../repo.worktrees/nestp/child -b nestp-child
+cp ../precious ../repo.worktrees/nestp/child/uncommitted.txt
+exec git -C ../repo.worktrees/nestp/child status --short
+stdout 'uncommitted.txt'
+! exec nt rm -f nestp
+stderr 'refusing to remove .*nestp: contains nested worktree .*nestp/child'
+exists ../repo.worktrees/nestp
+exists ../repo.worktrees/nestp/child
+exec git worktree list
+stdout 'nestp/child'
+
+# naming both worktrees preserves the existing successful batch behavior
+exec nt rm -f nestp nestp-child
+! exists ../repo.worktrees/nestp
+! exists ../repo.worktrees/nestp/child
+exec git worktree list
+! stdout 'nestp'
+
+-- precious --
+precious

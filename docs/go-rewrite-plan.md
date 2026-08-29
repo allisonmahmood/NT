@@ -162,7 +162,10 @@ must reproduce it (same stdout markers, same exit code, same filesystem effect).
   - locked → refused even **with** `-f` (mirror git; needs explicit unlock).
   - clean-but-submodule / gitlink-no-.gitmodules → refused without `-f`.
   - git-error worktree → fail **closed** (refuse), never silently "clean".
-- Nested parent+child in one batch → child already gone counts as success (honest 0).
+- A parent physically containing a registered nested worktree is refused if that
+  child is omitted from the removal set; the error names the protected child.
+- Nested parent+child both named in one batch → child already gone counts as
+  success (honest 0).
 - No target → huh multi-picker (space=mark, enter=remove; no marks = highlighted).
 - `git fsck` stays clean after deferred removal; back-to-back removals in one process
   must not collide on trash names (pid + atomic counter, like zsh's `$$-seq`).

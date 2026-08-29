@@ -87,7 +87,7 @@ func newRmCmd() *cobra.Command {
 				os.Exit(1)
 			}
 
-			rc := removeWorktrees(force, r.MainDir, doomed)
+			rc := removeWorktrees(force, r, doomed)
 			// Relocate only once the tree we were standing in is actually gone — a
 			// refused removal must leave the shell where it is, not yank it to main.
 			if stepOut && !pathExists(pwd) {
@@ -103,14 +103,29 @@ func newRmCmd() *cobra.Command {
 
 // removeWorktrees removes a set of resolved worktree paths fast: provably-simple
 // trees are renamed aside (instant) and reclaimed in the background; the rest are
-// handed to `git worktree remove`. Returns 0, or 1 if any tree was refused/failed.
-func removeWorktrees(force, mainDir string, targets []string) int {
-	simple := worktree.ClassifySimple(force, targets)
+// handed to `git worktree remove`. A target containing an unnamed nested worktree
+// is refused before either path can destroy the child. Returns 0, or 1 if any tree
+// was refused/failed.
+func removeWorktrees(force string, r *worktree.Repo, targets []string) int {
+	blockers := unnamedNestedWorktrees(r.Worktrees, targets)
+	candidates := make([]string, 0, len(targets))
 	rc := 0
+	for _, t := range targets {
+		if len(blockers[t]) == 0 {
+			candidates = append(candidates, t)
+			continue
+		}
+		rc = 1
+		for _, child := range blockers[t] {
+			warn("refusing to remove %s: contains nested worktree %s", t, child)
+		}
+	}
+
+	simple := worktree.ClassifySimple(force, candidates)
 
 	// Pass 1: delegate the not-provably-simple ones to git (it prints its own
 	// precise refusal reason).
-	for _, t := range targets {
+	for _, t := range candidates {
 		if simple[t] {
 			continue
 		}
@@ -119,7 +134,7 @@ func removeWorktrees(force, mainDir string, targets []string) int {
 			gitArgs = append(gitArgs, force)
 		}
 		gitArgs = append(gitArgs, t)
-		if git.Run(mainDir, gitArgs...) {
+		if git.Run(r.MainDir, gitArgs...) {
 			info("removed %s", t)
 		} else {
 			rc = 1
@@ -131,7 +146,7 @@ func removeWorktrees(force, mainDir string, targets []string) int {
 	swept := false
 	pid := os.Getpid()
 	seq := 0
-	for _, t := range targets {
+	for _, t := range candidates {
 		if !simple[t] {
 			continue
 		}
@@ -153,12 +168,35 @@ func removeWorktrees(force, mainDir string, targets []string) int {
 	}
 
 	if len(doomed) > 0 || swept {
-		git.RunQuiet(mainDir, "worktree", "prune") // drop the renamed-aside (and dragged) entries
+		git.RunQuiet(r.MainDir, "worktree", "prune") // drop the renamed-aside (and dragged) entries
 		if len(doomed) > 0 {
 			shell.SpawnReap(doomed)
 		}
 	}
 	return rc
+}
+
+func unnamedNestedWorktrees(registered []worktree.Worktree, targets []string) map[string][]string {
+	selected := make(map[string]bool, len(targets))
+	for _, target := range targets {
+		selected[target] = true
+	}
+
+	blockers := make(map[string][]string)
+	for _, target := range targets {
+		for _, candidate := range registered {
+			if candidate.Path == target || selected[candidate.Path] {
+				continue
+			}
+			if _, err := os.Lstat(candidate.Path); os.IsNotExist(err) {
+				continue
+			}
+			if insideDir(candidate.Path, target) {
+				blockers[target] = append(blockers[target], candidate.Path)
+			}
+		}
+	}
+	return blockers
 }
 
 // splitForce pulls -f/--force out from anywhere among the args.
