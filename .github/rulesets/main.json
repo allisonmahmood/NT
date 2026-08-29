@@ -48,6 +48,10 @@
             "integration_id": 15368
           },
           {
+            "context": "dependency-review",
+            "integration_id": 15368
+          },
+          {
             "context": "test (ubuntu-latest, 1.27.0)",
             "integration_id": 15368
           },
