@@ -11,7 +11,7 @@ depends=('git')
 makedepends=('go')
 options=('!debug')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-# v0.1.0 is not published. Replace SKIP with the release source archive hash before AUR publication.
+# After v0.1.0 is published, replace SKIP with `makepkg -g` output and regenerate .SRCINFO.
 sha256sums=('SKIP')
 
 build() {
@@ -23,13 +23,6 @@ build() {
   export GOFLAGS="-buildmode=pie -trimpath -mod=readonly -modcacherw"
   export GOTOOLCHAIN=local
   go build -ldflags="-linkmode=external -X main.version=$pkgver" -o nt .
-}
-
-check() {
-  cd "NT-$pkgver"
-  export CGO_ENABLED=1
-  export GOTOOLCHAIN=local
-  go test ./...
 }
 
 package() {

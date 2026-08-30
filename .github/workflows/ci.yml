@@ -67,19 +67,19 @@ jobs:
     env:
       PKGVER: "0.1.0"
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Install Arch packaging tools
         run: pacman --sync --refresh --sysupgrade --noconfirm git go namcap
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Create an unpublished source archive
         run: |
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          # Until v0.1.0 is tagged, exercise the PKGBUILD against the current source tree.
           git archive --format=tar.gz --prefix="NT-${PKGVER}/" \
             --output="packaging/arch/nt/nt-${PKGVER}.tar.gz" HEAD
           useradd --create-home builder
           chown --recursive builder:builder "$GITHUB_WORKSPACE"
       - name: Build and inspect the source package
         run: |
-          su builder -c "cd '$GITHUB_WORKSPACE/packaging/arch/nt' && makepkg --syncdeps --noconfirm --cleanbuild"
+          su --login builder --command "cd '$GITHUB_WORKSPACE/packaging/arch/nt' && makepkg --noconfirm --cleanbuild"
           package="packaging/arch/nt/nt-${PKGVER}-1-x86_64.pkg.tar.zst"
           namcap packaging/arch/nt/PKGBUILD "$package"
           mkdir package-root

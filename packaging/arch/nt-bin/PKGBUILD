@@ -18,7 +18,8 @@ noextract=(
   "nt_${pkgver}_linux_amd64.tar.gz"
   "nt_${pkgver}_linux_arm64.tar.gz"
 )
-# v0.1.0 is not published. Replace SKIP with release hashes before AUR publication.
+# After v0.1.0 is published and its assets are verified, replace the SKIPs with
+# `makepkg -g` output on both architectures, then regenerate .SRCINFO.
 sha256sums=('SKIP')
 sha256sums_x86_64=('SKIP')
 sha256sums_aarch64=('SKIP')
