@@ -72,6 +72,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Create an unpublished source archive
         run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           # Until v0.1.0 is tagged, exercise the PKGBUILD against the current source tree.
           git archive --format=tar.gz --prefix="NT-${PKGVER}/" \
             --output="packaging/arch/nt/nt-${PKGVER}.tar.gz" HEAD
