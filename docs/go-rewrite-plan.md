@@ -252,15 +252,21 @@ Parity acceptance gate: layer 3 must be **100% green** before the zsh plugin is 
 - **build-snapshot**: create a local `v0.1.0-snapshot` tag, then run
   `GORELEASER_CURRENT_TAG=v0.1.0-snapshot goreleaser release --clean --skip=publish`
   to exercise changelog generation, linux/darwin amd64+arm64 archives, checksums,
-  and embedded version metadata without publishing a GitHub Release. The job
-  name is retained because it is a required status check.
+  per-archive SPDX SBOMs (syft), and embedded version metadata without
+  publishing a GitHub Release. The job name is retained because it is a
+  required status check.
 
 ### `.github/workflows/release.yml` (tag `v*`)
 - `goreleaser/goreleaser-action` with `fetch-depth: 0`; `GITHUB_TOKEN` for the
   release + a `GH_PAT` secret to push the **Homebrew tap** (second repo
   `homebrew-nt`). Produces: linux/darwin amd64+arm64 archives, `checksums.txt`,
-  GH Release with auto changelog, Homebrew formula, optional Scoop/Nix/AUR, SBOM,
-  and cosign signing (modern supply-chain hygiene).
+  per-archive SPDX SBOMs, GH Release with auto changelog, Homebrew formula,
+  optional Scoop/Nix/AUR. Every archive, SBOM, and `checksums.txt` gets a GitHub
+  build-provenance attestation (`actions/attest-build-provenance`, Sigstore
+  keyless via OIDC — no cosign/GPG key material); consumers verify with
+  `gh attestation verify <asset> --repo allisonmahmood/NT`. Release immutability
+  is enabled on the repo (`.github/immutable-releases.json`), so published
+  assets cannot be replaced or appended.
 
 ### Free extras worth turning on
 - **Dependabot** (gomod + github-actions), **CodeQL** (Go), an install one-liner

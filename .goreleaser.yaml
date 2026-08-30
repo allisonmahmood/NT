@@ -36,6 +36,11 @@ archives:
 checksum:
   name_template: "checksums.txt"
 
+# One SPDX JSON SBOM per archive (nt_<ver>_<os>_<arch>.tar.gz.sbom.json).
+# Requires syft on PATH; CI installs it via anchore/sbom-action/download-syft.
+sboms:
+  - artifacts: archive
+
 changelog:
   sort: asc
   use: git
