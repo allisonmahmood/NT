@@ -41,6 +41,11 @@ checksum:
 sboms:
   - artifacts: archive
 
+# release.yml attests and verifies the assets, then flips the draft to
+# published; immutability only applies once published.
+release:
+  draft: true
+
 changelog:
   sort: asc
   use: git

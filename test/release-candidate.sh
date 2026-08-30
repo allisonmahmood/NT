@@ -34,8 +34,16 @@ for target in "${targets[@]}"; do
   fi
 
   sbom="$archive.sbom.json"
-  if ! grep -q '"spdxVersion"' "$sbom" 2>/dev/null; then
-    echo "missing or non-SPDX SBOM: $sbom" >&2
+  if [[ ! -f "$sbom" ]]; then
+    echo "missing SBOM: $sbom" >&2
+    exit 1
+  fi
+  if ! grep -q '"spdxVersion"' "$sbom"; then
+    echo "SBOM is not SPDX JSON: $sbom" >&2
+    exit 1
+  fi
+  if ! grep -q "  $(basename "$sbom")\$" "$checksum_file"; then
+    echo "SBOM not listed in checksum manifest: $sbom" >&2
     exit 1
   fi
 

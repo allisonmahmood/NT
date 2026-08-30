@@ -63,6 +63,12 @@ jobs:
 
   build-snapshot:
     runs-on: ubuntu-latest
+    # id-token/attestations are only usable on the push-to-main run below;
+    # pull_request runs (no OIDC for forks) just build and verify artifacts.
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -85,3 +91,18 @@ jobs:
           GORELEASER_CURRENT_TAG: v0.1.0-snapshot
       - name: Verify release candidate artifacts
         run: test/release-candidate.sh
+      # Rehearse provenance without publishing anything: attest the snapshot
+      # artifacts and verify every subject, exactly as release.yml will.
+      - name: Attest release candidate artifacts
+        if: github.event_name == 'push'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.sbom.json
+            dist/checksums.txt
+      - name: Verify release candidate attestations
+        if: github.event_name == 'push'
+        run: test/verify-attestations.sh
+        env:
+          GH_TOKEN: ${{ github.token }}

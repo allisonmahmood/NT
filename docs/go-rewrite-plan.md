@@ -72,7 +72,7 @@ Why this protocol:
 | Git access | **shell out to `git`** via `os/exec` | The contract the tests rely on is `git worktree`'s exact semantics (locked/dirty/submodule refusals). `go-git` has weak worktree support. Shelling out = guaranteed parity. |
 | Concurrency | stdlib `errgroup` + bounded sem | Replaces `xargs -P 16` for the parallel `git status` walk; `go test -race` covers it. |
 | Tests | `testing` + **rogpeppe/go-internal `testscript`** | testscript (`.txtar`) is the idiomatic way to test Go CLIs end-to-end with golden-file auto-update; plus the ported zsh suite as the parity oracle. |
-| Release | **goreleaser** + GitHub Actions | Cross-compile, archives, checksums, GH Release, Homebrew tap, SBOM + cosign. |
+| Release | **goreleaser** + GitHub Actions | Cross-compile, archives, checksums, GH Release, Homebrew tap, SBOMs + GitHub build attestations, immutable releases. |
 | Lint | **golangci-lint v2** | v2.x, single `.golangci.yml`. |
 
 Module path: `github.com/allisonmahmood/nt`. Unix-first (linux/darwin, amd64+arm64);
@@ -253,8 +253,10 @@ Parity acceptance gate: layer 3 must be **100% green** before the zsh plugin is 
   `GORELEASER_CURRENT_TAG=v0.1.0-snapshot goreleaser release --clean --skip=publish`
   to exercise changelog generation, linux/darwin amd64+arm64 archives, checksums,
   per-archive SPDX SBOMs (syft), and embedded version metadata without
-  publishing a GitHub Release. The job name is retained because it is a
-  required status check.
+  publishing a GitHub Release. On push to `main` it also attests those
+  artifacts and runs `gh attestation verify` on each (`test/verify-attestations.sh`),
+  rehearsing the release provenance path. The job name is retained because it
+  is a required status check.
 
 ### `.github/workflows/release.yml` (tag `v*`)
 - `goreleaser/goreleaser-action` with `fetch-depth: 0`; `GITHUB_TOKEN` for the
@@ -264,9 +266,12 @@ Parity acceptance gate: layer 3 must be **100% green** before the zsh plugin is 
   optional Scoop/Nix/AUR. Every archive, SBOM, and `checksums.txt` gets a GitHub
   build-provenance attestation (`actions/attest-build-provenance`, Sigstore
   keyless via OIDC — no cosign/GPG key material); consumers verify with
-  `gh attestation verify <asset> --repo allisonmahmood/NT`. Release immutability
-  is enabled on the repo (`.github/immutable-releases.json`), so published
-  assets cannot be replaced or appended.
+  `gh attestation verify <asset> --repo allisonmahmood/NT`. The release is
+  created as a draft, attested and verified, and only then published, so a
+  failed attestation never yields a public release without provenance. Release
+  immutability is enabled on the repo (`.github/immutable-releases.json`) and
+  checked by the workflow before publishing, so published assets cannot be
+  replaced or appended.
 
 ### Free extras worth turning on
 - **Dependabot** (gomod + github-actions), **CodeQL** (Go), an install one-liner

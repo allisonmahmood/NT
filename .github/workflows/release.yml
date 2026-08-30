@@ -29,7 +29,13 @@ jobs:
         uses: anchore/sbom-action/download-syft@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
         with:
           syft-version: v1.51.1
-      - name: goreleaser
+      # Refuse to publish unless the repo still has release immutability on
+      # (recorded in .github/immutable-releases.json).
+      - name: Check release immutability is enabled
+        run: gh api "repos/$GITHUB_REPOSITORY/immutable-releases" --jq .enabled | grep -qx true
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: goreleaser (draft release)
         uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7
         with:
           version: v2.18.0
@@ -38,11 +44,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # GH_PAT pushes the Homebrew tap once the tap repo + secret exist.
           # GH_PAT: ${{ secrets.GH_PAT }}
-      # Build provenance (SLSA) for every archive, SBOM, and the checksum
-      # manifest, tying each asset to this workflow run and source revision.
-      # Verify with: gh attestation verify <file> --repo allisonmahmood/NT
-      # No cosign/GPG keys are involved; the signature is Sigstore keyless via
-      # the workflow's OIDC identity.
+      # Sigstore keyless provenance via the workflow's OIDC identity (no
+      # cosign/GPG keys). Verify with: gh attestation verify <file> --repo <repo>
       - name: Attest build provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
@@ -50,3 +53,13 @@ jobs:
             dist/*.tar.gz
             dist/*.sbom.json
             dist/checksums.txt
+      - name: Verify attestations
+        run: test/verify-attestations.sh
+        env:
+          GH_TOKEN: ${{ github.token }}
+      # Only now does the release become public (and immutable); a failed
+      # attest/verify above leaves a draft the maintainer can delete.
+      - name: Publish release
+        run: gh release edit "$GITHUB_REF_NAME" --draft=false
+        env:
+          GH_TOKEN: ${{ github.token }}
