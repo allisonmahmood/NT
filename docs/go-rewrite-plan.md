@@ -250,10 +250,10 @@ Parity acceptance gate: layer 3 must be **100% green** before the zsh plugin is 
 - **parity**: ubuntu + macos; `apt-get install zsh git` (macOS has zsh); build the
   binary, run the ported zsh suite via the generated shim.
 - **build-snapshot**: create a local `v0.1.0-snapshot` tag, then run
-  `goreleaser release --clean --skip=publish` to exercise changelog generation,
-  linux/darwin amd64+arm64 archives, checksums, and embedded version metadata
-  without publishing a GitHub Release. The job name is retained because it is a
-  required status check.
+  `GORELEASER_CURRENT_TAG=v0.1.0-snapshot goreleaser release --clean --skip=publish`
+  to exercise changelog generation, linux/darwin amd64+arm64 archives, checksums,
+  and embedded version metadata without publishing a GitHub Release. The job
+  name is retained because it is a required status check.
 
 ### `.github/workflows/release.yml` (tag `v*`)
 - `goreleaser/goreleaser-action` with `fetch-depth: 0`; `GITHUB_TOKEN` for the
