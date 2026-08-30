@@ -9,7 +9,9 @@
     "actions/setup-go@*",
     "anchore/sbom-action/download-syft@*",
     "anchore/sbom-action@*",
+    "github/codeql-action/upload-sarif@*",
     "golangci/golangci-lint-action@*",
-    "goreleaser/goreleaser-action@*"
+    "goreleaser/goreleaser-action@*",
+    "ossf/scorecard-action@*"
   ]
 }
