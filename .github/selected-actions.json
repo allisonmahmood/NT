@@ -6,6 +6,7 @@
     "actions/checkout@*",
     "actions/dependency-review-action@*",
     "actions/setup-go@*",
+    "anchore/sbom-action/download-syft@*",
     "anchore/sbom-action@*",
     "golangci/golangci-lint-action@*",
     "goreleaser/goreleaser-action@*"
