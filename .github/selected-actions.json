@@ -3,6 +3,7 @@
   "verified_allowed": false,
   "patterns_allowed": [
     "actions/attest-build-provenance@*",
+    "actions/attest@*",
     "actions/checkout@*",
     "actions/dependency-review-action@*",
     "actions/setup-go@*",
