@@ -25,17 +25,130 @@ no scattering them across `/tmp`, no losing track of where they went:
 
 ## Install
 
-Grab the binary, then add one line to your shell rc:
+The first release will be **v0.1.0**. It is not published yet; the version-pinned
+commands below are ready for that release but will fail until it exists. Do not
+replace `v0.1.0` with `latest` when you need a reproducible install.
+
+### Arch Linux and other Linux distributions: Go toolchain
+
+This path requires Go 1.25 or newer. It downloads the tagged source module and
+builds `nt` locally:
 
 ```sh
-# Go toolchain:
-go install github.com/allisonmahmood/nt@latest
-
-# …or build from a clone:
-git clone https://github.com/allisonmahmood/nt && cd nt && go build -o ~/bin/nt .
+mkdir -p "$HOME/.local/bin"
+GOBIN="$HOME/.local/bin" go install github.com/allisonmahmood/nt@v0.1.0
+go version -m "$HOME/.local/bin/nt" | grep 'mod.*github.com/allisonmahmood/nt.*v0.1.0'
+export PATH="$HOME/.local/bin:$PATH"
 ```
 
-Then wire up the shell integration (defines the `nt` command **and** tab completion):
+The `go version -m` command should print the
+`github.com/allisonmahmood/nt` module at `v0.1.0`. Because this path builds from
+source without GoReleaser's version linker flag, `nt --version` reports
+`nt version dev`; use the embedded module version to check the source version.
+This locally built binary is not one of the prebuilt artifacts covered by NT's
+GitHub build attestations.
+
+### Arch Linux and other Linux distributions: release archive
+
+The commands below install the Linux x86-64 archive. They require
+[`gh`](https://cli.github.com/) to be authenticated for GitHub and GNU
+`sha256sum`, both of which are available in the Arch repositories.
+
+```sh
+repo=allisonmahmood/nt
+version=v0.1.0
+platform=linux_amd64
+archive="nt_${version#v}_${platform}.tar.gz"
+workdir="$(mktemp -d)"
+cd "$workdir"
+
+# Refuse a release that GitHub has not locked against further changes.
+test "$(gh api "repos/$repo/releases/tags/$version" --jq .immutable)" = true
+
+# Pin both the release tag and the exact asset names; do not download "latest".
+gh release download "$version" --repo "$repo" \
+  --pattern "$archive" \
+  --pattern "$archive.sbom.json" \
+  --pattern checksums.txt
+
+# Match these bytes to the digest GitHub records for this exact release asset.
+release_digest="$(
+  gh api "repos/$repo/releases/tags/$version" \
+    --jq ".assets[] | select(.name == \"$archive\") | .digest"
+)"
+local_digest="sha256:$(sha256sum "$archive" | cut -d ' ' -f1)"
+test "$local_digest" = "$release_digest"
+
+# Verify the archive and its SPDX SBOM against the release checksum manifest.
+sha256sum --check --ignore-missing checksums.txt
+
+# Verify provenance from the release workflow on the matching protected tag.
+verify_attestation() {
+  gh attestation verify "$1" --repo "$repo" \
+    --signer-workflow "$repo/.github/workflows/release.yml" \
+    --source-ref "refs/tags/$version" \
+    --deny-self-hosted-runners
+}
+verify_attestation "$archive"
+verify_attestation "$archive.sbom.json"
+verify_attestation checksums.txt
+
+tar -xzf "$archive"
+mkdir -p "$HOME/.local/bin"
+install -m 0755 nt "$HOME/.local/bin/nt"
+export PATH="$HOME/.local/bin:$PATH"
+nt --version
+```
+
+A v0.1.0 release archive must report:
+
+```text
+nt version 0.1.0
+```
+
+Stop if any verification command fails or the version differs.
+
+The checks establish different facts:
+
+- `.immutable` confirms GitHub has locked the published release against asset
+  replacement or addition.
+- The release-asset digest confirms the downloaded bytes are the named asset on
+  that exact release, while `checksums.txt` checks the archive and SBOM together.
+- `gh attestation verify` cryptographically binds each file's digest to a
+  GitHub-hosted run of this repository's release workflow on the matching tag.
+  Its output identifies the source revision; compare that revision with the one
+  you intended to trust.
+- The SPDX SBOM is a machine-readable inventory of the archive's contents.
+
+Provenance and checksums can show where an artifact came from and whether its
+bytes changed. They do **not** prove that the source, dependencies, build
+workflow, or resulting program are safe.
+
+### Other supported release archives
+
+Set `platform` in the archive commands above to the value for your machine:
+
+| Operating system | CPU | `platform` | Archive |
+|---|---|---|---|
+| Linux | x86-64 | `linux_amd64` | `nt_0.1.0_linux_amd64.tar.gz` |
+| Linux | ARM64 | `linux_arm64` | `nt_0.1.0_linux_arm64.tar.gz` |
+| macOS | Intel | `darwin_amd64` | `nt_0.1.0_darwin_amd64.tar.gz` |
+| macOS | Apple silicon | `darwin_arm64` | `nt_0.1.0_darwin_arm64.tar.gz` |
+
+Windows is not currently supported. The macOS archives receive the same
+checksums, SPDX SBOMs, and GitHub build attestations as Linux, but they are not
+code-signed or notarized. macOS includes `shasum`; for the archive checksum, use
+`grep "  ${archive}$" checksums.txt | shasum -a 256 --check` instead of
+`sha256sum`.
+
+An AUR package ([#34](https://github.com/allisonmahmood/nt/issues/34)) and a
+Homebrew tap ([#28](https://github.com/allisonmahmood/nt/issues/28)) are coming,
+but neither is published yet.
+
+### Shell integration
+
+After either installation path, keep `$HOME/.local/bin` on your shell's `PATH`
+and add the matching hook (which defines the `nt` command and tab completion):
 
 ```sh
 # ~/.zshrc
