@@ -54,7 +54,9 @@ The commands below install the Linux x86-64 archive. They require
 [`gh`](https://cli.github.com/) to be authenticated for GitHub and GNU
 `sha256sum`, both of which are available in the Arch repositories.
 
-```sh
+```bash
+bash <<'INSTALL_NT'
+set -euo pipefail
 repo=allisonmahmood/nt
 version=v0.1.0
 platform=linux_amd64
@@ -96,8 +98,10 @@ verify_attestation checksums.txt
 tar -xzf "$archive"
 mkdir -p "$HOME/.local/bin"
 install -m 0755 nt "$HOME/.local/bin/nt"
-export PATH="$HOME/.local/bin:$PATH"
-nt --version
+reported_version="$("$HOME/.local/bin/nt" --version)"
+test "$reported_version" = "nt version ${version#v}"
+printf '%s\n' "$reported_version"
+INSTALL_NT
 ```
 
 A v0.1.0 release archive must report:
@@ -137,9 +141,15 @@ Set `platform` in the archive commands above to the value for your machine:
 
 Windows is not currently supported. The macOS archives receive the same
 checksums, SPDX SBOMs, and GitHub build attestations as Linux, but they are not
-code-signed or notarized. macOS includes `shasum`; for the archive checksum, use
-`grep "  ${archive}$" checksums.txt | shasum -a 256 --check` instead of
-`sha256sum`.
+code-signed or notarized. macOS includes `shasum`; replace both `sha256sum`
+commands in the block above with:
+
+```sh
+local_digest="sha256:$(shasum -a 256 "$archive" | cut -d ' ' -f1)"
+awk -v archive="$archive" \
+  '$2 == archive || $2 == archive ".sbom.json"' checksums.txt |
+  shasum -a 256 --check
+```
 
 An AUR package ([#34](https://github.com/allisonmahmood/nt/issues/34)) and a
 Homebrew tap ([#28](https://github.com/allisonmahmood/nt/issues/28)) are coming,
