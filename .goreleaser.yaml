@@ -36,9 +36,6 @@ archives:
 checksum:
   name_template: "checksums.txt"
 
-snapshot:
-  version_template: "0.1.0-snapshot"
-
 changelog:
   sort: asc
   use: git

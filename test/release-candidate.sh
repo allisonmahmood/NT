@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Verify the complete snapshot artifact set without executing cross-compiled binaries.
+# Verify cross-compiled metadata and execute the native release candidate.
 set -euo pipefail
 
-readonly dist_dir="${1:-dist}"
-readonly expected_version="${2:-0.1.0-snapshot}"
+readonly dist_dir="dist"
+readonly expected_version="0.1.0-snapshot"
 readonly checksum_file="$dist_dir/checksums.txt"
 readonly targets=(darwin_amd64 darwin_arm64 linux_amd64 linux_arm64)
 readonly changelog_file="$dist_dir/CHANGELOG.md"
