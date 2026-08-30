@@ -1,13 +1,13 @@
-# goreleaser config for nt. Authored now; releases are cut later (see plan §5).
-# The first Go release continues the existing version line: tag it **v0.0.2**
-# (the zsh plugin was v0.0.1). Validate locally with: goreleaser build --snapshot --clean
+# GoReleaser config for nt. Releases are cut later (see plan §5).
+# The first Go release is v0.1.0. CI uses a local v0.1.0-snapshot tag to
+# exercise changelog generation and packaging without publishing.
 version: 2
 
 project_name: nt
 
 before:
   hooks:
-    - go mod tidy
+    - go mod tidy -diff
 
 builds:
   - id: nt
@@ -37,11 +37,11 @@ checksum:
   name_template: "checksums.txt"
 
 snapshot:
-  version_template: "{{ incpatch .Version }}-snapshot"
+  version_template: "0.1.0-snapshot"
 
 changelog:
   sort: asc
-  use: github
+  use: git
   filters:
     exclude:
       - "^docs:"
