@@ -61,6 +61,31 @@ jobs:
       - name: Run the zsh parity oracle against the Go binary
         run: zsh test/parity/run.zsh
 
+  arch-package:
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    env:
+      PKGVER: "0.1.0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install Arch packaging tools
+        run: pacman --sync --refresh --sysupgrade --noconfirm git go namcap
+      - name: Create an unpublished source archive
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git archive --format=tar.gz --prefix="NT-${PKGVER}/" \
+            --output="packaging/arch/nt/nt-${PKGVER}.tar.gz" HEAD
+          useradd --create-home builder
+          chown --recursive builder:builder "$GITHUB_WORKSPACE"
+      - name: Build and inspect the source package
+        run: |
+          su builder -c "cd '$GITHUB_WORKSPACE/packaging/arch/nt' && makepkg --syncdeps --noconfirm --cleanbuild"
+          package="packaging/arch/nt/nt-${PKGVER}-1-x86_64.pkg.tar.zst"
+          namcap packaging/arch/nt/PKGBUILD "$package"
+          mkdir package-root
+          bsdtar -xf "$package" -C package-root
+          test "$(package-root/usr/bin/nt --version)" = "nt version ${PKGVER}"
+
   build-snapshot:
     runs-on: ubuntu-latest
     # id-token/attestations are only usable on the push-to-main run below;

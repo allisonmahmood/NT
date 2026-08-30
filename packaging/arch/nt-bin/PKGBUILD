@@ -1,0 +1,42 @@
+# Maintainer: Allison Mahmood
+
+pkgname=nt-bin
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Git worktrees, minus the ceremony (prebuilt binary)'
+arch=('x86_64' 'aarch64')
+url='https://github.com/allisonmahmood/NT'
+license=('MIT')
+depends=('git')
+provides=("nt=$pkgver")
+conflicts=('nt')
+options=('!strip' '!debug')
+source=("$url/releases/download/v$pkgver/checksums.txt")
+source_x86_64=("$url/releases/download/v$pkgver/nt_${pkgver}_linux_amd64.tar.gz")
+source_aarch64=("$url/releases/download/v$pkgver/nt_${pkgver}_linux_arm64.tar.gz")
+noextract=(
+  "nt_${pkgver}_linux_amd64.tar.gz"
+  "nt_${pkgver}_linux_arm64.tar.gz"
+)
+# v0.1.0 is not published. Replace SKIP with release hashes before AUR publication.
+sha256sums=('SKIP')
+sha256sums_x86_64=('SKIP')
+sha256sums_aarch64=('SKIP')
+
+prepare() {
+  local release_arch archive
+  if [[ "$CARCH" == aarch64 ]]; then
+    release_arch=arm64
+  else
+    release_arch=amd64
+  fi
+  archive="nt_${pkgver}_linux_${release_arch}.tar.gz"
+
+  awk -v archive="$archive" '$2 == archive { print }' checksums.txt | sha256sum --check
+  bsdtar -xf "$archive"
+}
+
+package() {
+  install -Dm755 nt "$pkgdir/usr/bin/nt"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}
