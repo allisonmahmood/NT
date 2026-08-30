@@ -96,12 +96,14 @@ verify_attestation "$archive.sbom.json"
 verify_attestation checksums.txt
 
 tar -xzf "$archive"
-mkdir -p "$HOME/.local/bin"
-install -m 0755 nt "$HOME/.local/bin/nt"
-reported_version="$("$HOME/.local/bin/nt" --version)"
+reported_version="$(./nt --version)"
 test "$reported_version" = "nt version ${version#v}"
 printf '%s\n' "$reported_version"
+
+mkdir -p "$HOME/.local/bin"
+install -m 0755 nt "$HOME/.local/bin/nt"
 INSTALL_NT
+export PATH="$HOME/.local/bin:$PATH"
 ```
 
 A v0.1.0 release archive must report:
@@ -162,12 +164,15 @@ and add the matching hook (which defines the `nt` command and tab completion):
 
 ```sh
 # ~/.zshrc
+export PATH="$HOME/.local/bin:$PATH"
 eval "$(nt init zsh)"
 
 # ~/.bashrc
+export PATH="$HOME/.local/bin:$PATH"
 eval "$(nt init bash)"
 
 # ~/.config/fish/config.fish
+fish_add_path "$HOME/.local/bin"
 nt init fish | source
 ```
 
