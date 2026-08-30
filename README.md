@@ -25,142 +25,92 @@ no scattering them across `/tmp`, no losing track of where they went:
 
 ## Install
 
-The first release will be **v0.1.0**. It is not published yet; the version-pinned
-commands below are ready for that release but will fail until it exists. Do not
-replace `v0.1.0` with `latest` when you need a reproducible install.
+The first release will be **v0.1.0**. It is not published yet, so the pinned
+release commands below will work only after it is published.
 
-### Arch Linux and other Linux distributions: Go toolchain
+### Go toolchain
 
-This path requires Go 1.25 or newer. It downloads the tagged source module and
-builds `nt` locally:
+With Go 1.25 or newer:
 
 ```sh
 mkdir -p "$HOME/.local/bin"
 GOBIN="$HOME/.local/bin" go install github.com/allisonmahmood/nt@v0.1.0
 go version -m "$HOME/.local/bin/nt" | grep 'mod.*github.com/allisonmahmood/nt.*v0.1.0'
-export PATH="$HOME/.local/bin:$PATH"
 ```
 
-The `go version -m` command should print the
-`github.com/allisonmahmood/nt` module at `v0.1.0`. Because this path builds from
-source without GoReleaser's version linker flag, `nt --version` reports
-`nt version dev`; use the embedded module version to check the source version.
-This locally built binary is not one of the prebuilt artifacts covered by NT's
-GitHub build attestations.
-
-### Arch Linux and other Linux distributions: release archive
-
-The commands below install the Linux x86-64 archive. They require
-[`gh`](https://cli.github.com/) to be authenticated for GitHub and GNU
-`sha256sum`, both of which are available in the Arch repositories.
-
-```bash
-bash <<'INSTALL_NT'
-set -euo pipefail
-repo=allisonmahmood/nt
-version=v0.1.0
-platform=linux_amd64
-archive="nt_${version#v}_${platform}.tar.gz"
-workdir="$(mktemp -d)"
-cd "$workdir"
-
-# Refuse a release that GitHub has not locked against further changes.
-test "$(gh api "repos/$repo/releases/tags/$version" --jq .immutable)" = true
-
-# Pin both the release tag and the exact asset names; do not download "latest".
-gh release download "$version" --repo "$repo" \
-  --pattern "$archive" \
-  --pattern "$archive.sbom.json" \
-  --pattern checksums.txt
-
-# Match these bytes to the digest GitHub records for this exact release asset.
-release_digest="$(
-  gh api "repos/$repo/releases/tags/$version" \
-    --jq ".assets[] | select(.name == \"$archive\") | .digest"
-)"
-local_digest="sha256:$(sha256sum "$archive" | cut -d ' ' -f1)"
-test "$local_digest" = "$release_digest"
-
-# Verify the archive and its SPDX SBOM against the release checksum manifest.
-sha256sum --check --ignore-missing checksums.txt
-
-# Verify provenance from the release workflow on the matching protected tag.
-verify_attestation() {
-  gh attestation verify "$1" --repo "$repo" \
-    --signer-workflow "$repo/.github/workflows/release.yml" \
-    --source-ref "refs/tags/$version" \
-    --deny-self-hosted-runners
-}
-verify_attestation "$archive"
-verify_attestation "$archive.sbom.json"
-verify_attestation checksums.txt
-
-tar -xzf "$archive"
-reported_version="$(./nt --version)"
-test "$reported_version" = "nt version ${version#v}"
-printf '%s\n' "$reported_version"
-
-mkdir -p "$HOME/.local/bin"
-install -m 0755 nt "$HOME/.local/bin/nt"
-INSTALL_NT
-export PATH="$HOME/.local/bin:$PATH"
-```
-
-A v0.1.0 release archive must report:
-
-```text
-nt version 0.1.0
-```
-
-Stop if any verification command fails or the version differs.
-
-The checks establish different facts:
-
-- `.immutable` confirms GitHub has locked the published release against asset
-  replacement or addition.
-- The release-asset digest confirms the downloaded bytes are the named asset on
-  that exact release, while `checksums.txt` checks the archive and SBOM together.
-- `gh attestation verify` cryptographically binds each file's digest to a
-  GitHub-hosted run of this repository's release workflow on the matching tag.
-  Its output identifies the source revision; compare that revision with the one
-  you intended to trust.
-- The SPDX SBOM is a machine-readable inventory of the archive's contents.
-
-Provenance and checksums can show where an artifact came from and whether its
-bytes changed. They do **not** prove that the source, dependencies, build
-workflow, or resulting program are safe.
-
-### Other supported release archives
-
-Set `platform` in the archive commands above to the value for your machine:
-
-| Operating system | CPU | `platform` | Archive |
-|---|---|---|---|
-| Linux | x86-64 | `linux_amd64` | `nt_0.1.0_linux_amd64.tar.gz` |
-| Linux | ARM64 | `linux_arm64` | `nt_0.1.0_linux_arm64.tar.gz` |
-| macOS | Intel | `darwin_amd64` | `nt_0.1.0_darwin_amd64.tar.gz` |
-| macOS | Apple silicon | `darwin_arm64` | `nt_0.1.0_darwin_arm64.tar.gz` |
-
-Windows is not currently supported. The macOS archives receive the same
-checksums, SPDX SBOMs, and GitHub build attestations as Linux, but they are not
-code-signed or notarized. macOS includes `shasum`; replace both `sha256sum`
-commands in the block above with:
+Until v0.1.0 is published, build the current source instead:
 
 ```sh
-local_digest="sha256:$(shasum -a 256 "$archive" | cut -d ' ' -f1)"
-awk -v archive="$archive" \
-  '$2 == archive || $2 == archive ".sbom.json"' checksums.txt |
-  shasum -a 256 --check
+mkdir -p "$HOME/.local/bin" && git clone https://github.com/allisonmahmood/NT nt && cd nt && go build -o "$HOME/.local/bin/nt" .
 ```
 
-An AUR package ([#34](https://github.com/allisonmahmood/nt/issues/34)) and a
-Homebrew tap ([#28](https://github.com/allisonmahmood/nt/issues/28)) are coming,
-but neither is published yet.
+Go-toolchain builds report `nt version dev`; `go version -m` verifies the tagged
+module version. GitHub build attestations cover release archives, not local
+builds.
+
+### Release archive
+
+These commands require an authenticated [`gh`](https://cli.github.com/). Run
+them in order and stop if a release, asset, checksum, attestation, or version
+command fails.
+
+#### Linux
+
+```sh
+version=v0.1.0
+platform="linux_$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')"
+archive="nt_${version#v}_${platform}.tar.gz"
+mkdir -p "nt-$version-$platform" && cd "nt-$version-$platform"
+gh release verify "$version" --repo allisonmahmood/NT
+gh release download "$version" --repo allisonmahmood/NT \
+  --pattern "$archive" --pattern checksums.txt
+gh release verify-asset "$version" "$archive" --repo allisonmahmood/NT
+awk -v archive="$archive" '$2 == archive' checksums.txt | sha256sum --check
+gh attestation verify "$archive" --repo allisonmahmood/NT
+gh attestation verify checksums.txt --repo allisonmahmood/NT
+tar -xzf "$archive"
+./nt --version
+mkdir -p "$HOME/.local/bin"
+install -m 0755 nt "$HOME/.local/bin/nt"
+```
+
+#### macOS
+
+```sh
+version=v0.1.0
+platform="darwin_$(uname -m | sed 's/x86_64/amd64/')"
+archive="nt_${version#v}_${platform}.tar.gz"
+mkdir -p "nt-$version-$platform" && cd "nt-$version-$platform"
+gh release verify "$version" --repo allisonmahmood/NT
+gh release download "$version" --repo allisonmahmood/NT \
+  --pattern "$archive" --pattern checksums.txt
+gh release verify-asset "$version" "$archive" --repo allisonmahmood/NT
+awk -v archive="$archive" '$2 == archive' checksums.txt | shasum -a 256 --check
+gh attestation verify "$archive" --repo allisonmahmood/NT
+gh attestation verify checksums.txt --repo allisonmahmood/NT
+tar -xzf "$archive"
+./nt --version
+mkdir -p "$HOME/.local/bin"
+install -m 0755 nt "$HOME/.local/bin/nt"
+```
+
+A v0.1.0 archive must report `nt version 0.1.0`. Archives support Linux and
+macOS on x86-64 (`amd64`) and ARM64 (`arm64`); Windows is not supported.
+
+`gh release verify` confirms GitHub's signed, immutable release;
+`verify-asset` ties the download to its exact release asset; and the checksum
+manifest verifies its bytes. `gh attestation verify` checks GitHub's build
+provenance for this repository. Each archive also has an SPDX SBOM named
+`$archive.sbom.json`. These checks prove origin and integrity, not code safety.
+
+The macOS archives are not code-signed or notarized. An AUR package
+([#34](https://github.com/allisonmahmood/nt/issues/34)) and Homebrew tap
+([#28](https://github.com/allisonmahmood/nt/issues/28)) are not published yet.
 
 ### Shell integration
 
-After either installation path, keep `$HOME/.local/bin` on your shell's `PATH`
-and add the matching hook (which defines the `nt` command and tab completion):
+Add the matching hook, which keeps the install directory on `PATH` and defines
+the `nt` command and tab completion:
 
 ```sh
 # ~/.zshrc
