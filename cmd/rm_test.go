@@ -8,7 +8,7 @@ import (
 	"github.com/allisonmahmood/nt/internal/worktree"
 )
 
-func TestUnnamedNestedBlockersUsesRegisteredPathSpelling(t *testing.T) {
+func TestNestedBlockersUsesRegisteredPathSpelling(t *testing.T) {
 	root := t.TempDir()
 	realParent := filepath.Join(root, "real-parent")
 	if err := os.Mkdir(realParent, 0o755); err != nil {
@@ -27,7 +27,7 @@ func TestUnnamedNestedBlockersUsesRegisteredPathSpelling(t *testing.T) {
 	// Resolving only the child changes it to real-parent/child and loses the
 	// parent/child prefix supplied by the worktree registry.
 	registered := []worktree.Worktree{{Path: parent}, {Path: child}}
-	blockers := unnamedNestedBlockers(registered, []string{parent})[parent]
+	blockers := nestedBlockers(registered, parent)
 	if len(blockers) != 1 || blockers[0] != child {
 		t.Fatalf("blockers = %v, want [%s]", blockers, child)
 	}
