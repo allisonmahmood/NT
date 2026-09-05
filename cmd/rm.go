@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -102,61 +103,40 @@ func newRmCmd() *cobra.Command {
 	}
 }
 
-// removeWorktrees removes a set of resolved worktree paths fast: provably-simple
-// trees are renamed aside (instant) and reclaimed in the background; the rest are
-// handed to `git worktree remove`. A target containing an unnamed nested worktree
-// is refused before either path can destroy the child. Returns 0, or 1 if any tree
-// was refused/failed.
+// removeWorktrees removes children before parents, checking for surviving nested
+// worktrees before every removal. Simple trees are renamed aside and reclaimed
+// in the background; other trees are handed to git. Returns 1 on any refusal.
 func removeWorktrees(force string, r *worktree.Repo, targets []string) int {
-	blockers := unnamedNestedBlockers(r.Worktrees, targets)
-	candidates := make([]string, 0, len(targets))
+	// A descendant always has a longer registered path than its ancestor.
+	slices.SortStableFunc(targets, func(a, b string) int { return len(b) - len(a) })
+	simple := worktree.ClassifySimple(force, targets)
 	rc := 0
-	for _, t := range targets {
-		if len(blockers[t]) == 0 {
-			candidates = append(candidates, t)
-			continue
-		}
-		rc = 1
-		for _, child := range blockers[t] {
-			warn("refusing to remove %s: contains nested worktree %s", t, child)
-		}
-	}
-
-	simple := worktree.ClassifySimple(force, candidates)
-
-	// Pass 1: delegate the not-provably-simple ones to git (it prints its own
-	// precise refusal reason).
-	for _, t := range candidates {
-		if simple[t] {
-			continue
-		}
-		gitArgs := []string{"worktree", "remove"}
-		if force != "" {
-			gitArgs = append(gitArgs, force)
-		}
-		gitArgs = append(gitArgs, t)
-		if git.Run(r.MainDir, gitArgs...) {
-			info("removed %s", t)
-		} else {
-			rc = 1
-		}
-	}
-
-	// Pass 2: fast-path the simple ones — rename aside (instant), reclaim later.
 	var doomed []string
-	swept := false
 	pid := os.Getpid()
 	seq := 0
-	for _, t := range candidates {
+	for _, t := range targets {
+		if blockers := nestedBlockers(r.Worktrees, t); len(blockers) > 0 {
+			for _, child := range blockers {
+				warn("refusing to remove %s: contains nested worktree %s", t, child)
+			}
+			rc = 1
+			continue
+		}
+
 		if !simple[t] {
+			gitArgs := []string{"worktree", "remove"}
+			if force != "" {
+				gitArgs = append(gitArgs, force)
+			}
+			gitArgs = append(gitArgs, t)
+			if git.Run(r.MainDir, gitArgs...) {
+				info("removed %s", t)
+			} else {
+				rc = 1
+			}
 			continue
 		}
-		if !pathExists(t) {
-			// Already gone — e.g. a parent worktree dragged this nested one along.
-			info("removed %s", t)
-			swept = true
-			continue
-		}
+
 		seq++
 		trash := filepath.Join(filepath.Dir(t), fmt.Sprintf("%s%d-%d", config.TrashPrefix, pid, seq))
 		if os.Rename(t, trash) == nil {
@@ -168,35 +148,26 @@ func removeWorktrees(force string, r *worktree.Repo, targets []string) int {
 		}
 	}
 
-	if len(doomed) > 0 || swept {
-		git.RunQuiet(r.MainDir, "worktree", "prune") // drop the renamed-aside (and dragged) entries
-		if len(doomed) > 0 {
-			shell.SpawnReap(doomed)
-		}
+	if len(doomed) > 0 {
+		git.RunQuiet(r.MainDir, "worktree", "prune")
+		shell.SpawnReap(doomed)
 	}
 	return rc
 }
 
-// unnamedNestedBlockers returns the registered, present child worktrees below
-// each target that were omitted from the same removal request.
-func unnamedNestedBlockers(registered []worktree.Worktree, targets []string) map[string][]string {
-	selected := make(map[string]bool, len(targets))
-	for _, target := range targets {
-		selected[target] = true
-	}
-
-	blockers := make(map[string][]string)
-	for _, target := range targets {
-		prefix := target + string(os.PathSeparator)
-		for _, candidate := range registered {
-			if selected[candidate.Path] || !strings.HasPrefix(candidate.Path, prefix) {
-				continue
-			}
-			if _, err := os.Lstat(candidate.Path); os.IsNotExist(err) {
-				continue
-			}
-			blockers[target] = append(blockers[target], candidate.Path)
+// nestedBlockers includes every registered descendant still present on disk,
+// including selected children whose removal failed. Unknown state fails closed.
+func nestedBlockers(registered []worktree.Worktree, target string) []string {
+	var blockers []string
+	prefix := target + string(os.PathSeparator)
+	for _, candidate := range registered {
+		if !strings.HasPrefix(candidate.Path, prefix) {
+			continue
 		}
+		if _, err := os.Lstat(candidate.Path); os.IsNotExist(err) {
+			continue
+		}
+		blockers = append(blockers, candidate.Path)
 	}
 	return blockers
 }
