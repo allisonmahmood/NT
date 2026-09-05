@@ -269,9 +269,21 @@ else
   print "  SKIP: could not set up a gitlink worktree"
 fi
 
-print "\n=== nt rm a parent worktree AND its nested child in one batch: honest exit code ==="
+print "\n=== nt rm -f a parent worktree: refuse an unnamed nested child ==="
 cd "$TMP/example-repo"; NT_NO_FETCH=1 nt nestp >/dev/null
-git worktree add -q "$TMP/example-repo.worktrees/nestp/child" -b nestp-child >/dev/null 2>&1
+nestp="$TMP/example-repo.worktrees/nestp"
+nestc="$nestp/child"
+git worktree add -q "$nestc" -b nestp-child >/dev/null 2>&1
+print precious > "$nestc/uncommitted.txt"
+cd "$TMP/example-repo"; rmout="$(nt rm -f "$nestp" 2>&1)"
+check "nested parent-only rm -f -> nonzero" "$?" "1"
+contains "refusal names the nested child" "$rmout" "$nestc"
+[[ -d "$nestp" && -f "$nestc/uncommitted.txt" && "$(git worktree list)" == *"$nestc"* ]] \
+  && { print "  PASS: parent and unnamed nested child preserved"; ((pass++)); } \
+  || { print "  FAIL: parent or unnamed nested child was destroyed (DATA LOSS)"; ((fail++)); }
+
+print "\n=== nt rm a parent worktree AND its nested child in one batch: honest exit code ==="
+
 cd "$TMP/example-repo"; nt rm -f "$TMP/example-repo.worktrees/nestp" "$TMP/example-repo.worktrees/nestp/child" >/dev/null 2>&1
 check "nested parent+child rm -f -> 0 (no false failure)" "$?" "0"
 for i in {1..50}; do [[ -z "$(find "$TMP/example-repo.worktrees" -name '.nt-trash-*' 2>/dev/null)" ]] && break; sleep 0.1; done
