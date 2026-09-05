@@ -58,7 +58,7 @@ your shell's error-handling settings.
 
 ```sh
 (
-set -eu
+set -euo pipefail
 version=v0.1.0
 platform="linux_$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')"
 archive="nt_${version#v}_${platform}.tar.gz"
@@ -76,7 +76,8 @@ gh attestation verify checksums.txt --repo allisonmahmood/NT \
   --signer-workflow allisonmahmood/NT/.github/workflows/release.yml \
   --source-ref "refs/tags/$version"
 tar -xzf "$archive"
-test "$(./nt --version)" = "nt version ${version#v}"
+reported_version="$(./nt --version)"
+test "$reported_version" = "nt version ${version#v}"
 mkdir -p "$HOME/.local/bin"
 install -m 0755 nt "$HOME/.local/bin/nt"
 )
@@ -86,7 +87,7 @@ install -m 0755 nt "$HOME/.local/bin/nt"
 
 ```sh
 (
-set -eu
+set -euo pipefail
 version=v0.1.0
 platform="darwin_$(uname -m | sed 's/x86_64/amd64/')"
 archive="nt_${version#v}_${platform}.tar.gz"
@@ -104,7 +105,8 @@ gh attestation verify checksums.txt --repo allisonmahmood/NT \
   --signer-workflow allisonmahmood/NT/.github/workflows/release.yml \
   --source-ref "refs/tags/$version"
 tar -xzf "$archive"
-test "$(./nt --version)" = "nt version ${version#v}"
+reported_version="$(./nt --version)"
+test "$reported_version" = "nt version ${version#v}"
 mkdir -p "$HOME/.local/bin"
 install -m 0755 nt "$HOME/.local/bin/nt"
 )
