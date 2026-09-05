@@ -33,6 +33,14 @@ exists ../repo.worktrees/nestp/child
 exec git worktree list
 stdout 'nestp/child'
 
+# Naming a locked child must not let its parent bypass Git's refusal.
+exec git worktree lock ../repo.worktrees/nestp/child
+! exec nt rm -f nestp nestp-child
+cmp ../repo.worktrees/nestp/child/uncommitted.txt ../precious
+exec git worktree list
+stdout 'nestp/child'
+exec git worktree unlock ../repo.worktrees/nestp/child
+
 # naming both worktrees preserves the existing successful batch behavior
 exec nt rm -f nestp nestp-child
 ! exists ../repo.worktrees/nestp
