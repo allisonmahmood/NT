@@ -25,26 +25,123 @@ no scattering them across `/tmp`, no losing track of where they went:
 
 ## Install
 
-Grab the binary, then add one line to your shell rc:
+The first release will be **v0.1.0**. It is not published yet, so the pinned
+release commands below will work only after it is published.
+
+### Go toolchain
+
+With Go 1.25 or newer:
 
 ```sh
-# Go toolchain:
-go install github.com/allisonmahmood/nt@latest
-
-# …or build from a clone:
-git clone https://github.com/allisonmahmood/nt && cd nt && go build -o ~/bin/nt .
+mkdir -p "$HOME/.local/bin"
+GOBIN="$HOME/.local/bin" go install github.com/allisonmahmood/nt@v0.1.0
+go version -m "$HOME/.local/bin/nt" | grep 'mod.*github.com/allisonmahmood/nt.*v0.1.0'
 ```
 
-Then wire up the shell integration (defines the `nt` command **and** tab completion):
+Until v0.1.0 is published, build the current source instead:
+
+```sh
+mkdir -p "$HOME/.local/bin" && git clone https://github.com/allisonmahmood/NT nt && cd nt && go build -o "$HOME/.local/bin/nt" .
+```
+
+Go-toolchain builds report `nt version dev`; `go version -m` verifies the tagged
+module version. GitHub build attestations cover release archives, not local
+builds.
+
+### Release archive
+
+These commands require an authenticated [`gh`](https://cli.github.com/). Paste
+the complete block into bash or zsh. It stops on any failed check without changing
+your shell's error-handling settings.
+
+#### Linux
+
+```sh
+(
+set -euo pipefail
+version=v0.1.0
+platform="linux_$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')"
+archive="nt_${version#v}_${platform}.tar.gz"
+mkdir -p "nt-$version-$platform"
+cd "nt-$version-$platform"
+gh release verify "$version" --repo allisonmahmood/NT
+gh release download "$version" --repo allisonmahmood/NT \
+  --pattern "$archive" --pattern checksums.txt
+gh release verify-asset "$version" "$archive" --repo allisonmahmood/NT
+awk -v archive="$archive" '$2 == archive' checksums.txt | sha256sum --check
+gh attestation verify "$archive" --repo allisonmahmood/NT \
+  --signer-workflow allisonmahmood/NT/.github/workflows/release.yml \
+  --source-ref "refs/tags/$version"
+gh attestation verify checksums.txt --repo allisonmahmood/NT \
+  --signer-workflow allisonmahmood/NT/.github/workflows/release.yml \
+  --source-ref "refs/tags/$version"
+tar -xzf "$archive"
+reported_version="$(./nt --version)"
+test "$reported_version" = "nt version ${version#v}"
+mkdir -p "$HOME/.local/bin"
+install -m 0755 nt "$HOME/.local/bin/nt"
+)
+```
+
+#### macOS
+
+```sh
+(
+set -euo pipefail
+version=v0.1.0
+platform="darwin_$(uname -m | sed 's/x86_64/amd64/')"
+archive="nt_${version#v}_${platform}.tar.gz"
+mkdir -p "nt-$version-$platform"
+cd "nt-$version-$platform"
+gh release verify "$version" --repo allisonmahmood/NT
+gh release download "$version" --repo allisonmahmood/NT \
+  --pattern "$archive" --pattern checksums.txt
+gh release verify-asset "$version" "$archive" --repo allisonmahmood/NT
+awk -v archive="$archive" '$2 == archive' checksums.txt | shasum -a 256 --check
+gh attestation verify "$archive" --repo allisonmahmood/NT \
+  --signer-workflow allisonmahmood/NT/.github/workflows/release.yml \
+  --source-ref "refs/tags/$version"
+gh attestation verify checksums.txt --repo allisonmahmood/NT \
+  --signer-workflow allisonmahmood/NT/.github/workflows/release.yml \
+  --source-ref "refs/tags/$version"
+tar -xzf "$archive"
+reported_version="$(./nt --version)"
+test "$reported_version" = "nt version ${version#v}"
+mkdir -p "$HOME/.local/bin"
+install -m 0755 nt "$HOME/.local/bin/nt"
+)
+```
+
+A v0.1.0 archive must report `nt version 0.1.0`. Archives support Linux and
+macOS on x86-64 (`amd64`) and ARM64 (`arm64`); Windows is not supported.
+
+`gh release verify` confirms GitHub's signed, immutable release;
+`verify-asset` ties the download to its exact release asset; and the checksum
+manifest verifies its bytes. `gh attestation verify` requires provenance from
+this repository's release workflow and the selected version tag. Each archive
+also has an SPDX SBOM named `$archive.sbom.json`. These checks prove origin and
+integrity, not code safety.
+
+The macOS archives are not code-signed or notarized. An AUR package
+([#34](https://github.com/allisonmahmood/nt/issues/34)) and Homebrew tap
+([#28](https://github.com/allisonmahmood/nt/issues/28)) are not published yet.
+
+### Shell integration
+
+Add the matching hook, which keeps the install directory on `PATH` and defines
+the `nt` command and tab completion:
 
 ```sh
 # ~/.zshrc
+export PATH="$HOME/.local/bin:$PATH"
 eval "$(nt init zsh)"
 
 # ~/.bashrc
+export PATH="$HOME/.local/bin:$PATH"
 eval "$(nt init bash)"
 
 # ~/.config/fish/config.fish
+fish_add_path "$HOME/.local/bin"
 nt init fish | source
 ```
 
