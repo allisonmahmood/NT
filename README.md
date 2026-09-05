@@ -50,48 +50,64 @@ builds.
 
 ### Release archive
 
-These commands require an authenticated [`gh`](https://cli.github.com/). Run
-them in order and stop if a release, asset, checksum, attestation, or version
-command fails.
+These commands require an authenticated [`gh`](https://cli.github.com/). Paste
+the complete block into bash or zsh. It stops on any failed check without changing
+your shell's error-handling settings.
 
 #### Linux
 
 ```sh
+(
+set -eu
 version=v0.1.0
 platform="linux_$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')"
 archive="nt_${version#v}_${platform}.tar.gz"
-mkdir -p "nt-$version-$platform" && cd "nt-$version-$platform"
+mkdir -p "nt-$version-$platform"
+cd "nt-$version-$platform"
 gh release verify "$version" --repo allisonmahmood/NT
 gh release download "$version" --repo allisonmahmood/NT \
   --pattern "$archive" --pattern checksums.txt
 gh release verify-asset "$version" "$archive" --repo allisonmahmood/NT
 awk -v archive="$archive" '$2 == archive' checksums.txt | sha256sum --check
-gh attestation verify "$archive" --repo allisonmahmood/NT
-gh attestation verify checksums.txt --repo allisonmahmood/NT
+gh attestation verify "$archive" --repo allisonmahmood/NT \
+  --signer-workflow allisonmahmood/NT/.github/workflows/release.yml \
+  --source-ref "refs/tags/$version"
+gh attestation verify checksums.txt --repo allisonmahmood/NT \
+  --signer-workflow allisonmahmood/NT/.github/workflows/release.yml \
+  --source-ref "refs/tags/$version"
 tar -xzf "$archive"
-./nt --version
+test "$(./nt --version)" = "nt version ${version#v}"
 mkdir -p "$HOME/.local/bin"
 install -m 0755 nt "$HOME/.local/bin/nt"
+)
 ```
 
 #### macOS
 
 ```sh
+(
+set -eu
 version=v0.1.0
 platform="darwin_$(uname -m | sed 's/x86_64/amd64/')"
 archive="nt_${version#v}_${platform}.tar.gz"
-mkdir -p "nt-$version-$platform" && cd "nt-$version-$platform"
+mkdir -p "nt-$version-$platform"
+cd "nt-$version-$platform"
 gh release verify "$version" --repo allisonmahmood/NT
 gh release download "$version" --repo allisonmahmood/NT \
   --pattern "$archive" --pattern checksums.txt
 gh release verify-asset "$version" "$archive" --repo allisonmahmood/NT
 awk -v archive="$archive" '$2 == archive' checksums.txt | shasum -a 256 --check
-gh attestation verify "$archive" --repo allisonmahmood/NT
-gh attestation verify checksums.txt --repo allisonmahmood/NT
+gh attestation verify "$archive" --repo allisonmahmood/NT \
+  --signer-workflow allisonmahmood/NT/.github/workflows/release.yml \
+  --source-ref "refs/tags/$version"
+gh attestation verify checksums.txt --repo allisonmahmood/NT \
+  --signer-workflow allisonmahmood/NT/.github/workflows/release.yml \
+  --source-ref "refs/tags/$version"
 tar -xzf "$archive"
-./nt --version
+test "$(./nt --version)" = "nt version ${version#v}"
 mkdir -p "$HOME/.local/bin"
 install -m 0755 nt "$HOME/.local/bin/nt"
+)
 ```
 
 A v0.1.0 archive must report `nt version 0.1.0`. Archives support Linux and
@@ -99,9 +115,10 @@ macOS on x86-64 (`amd64`) and ARM64 (`arm64`); Windows is not supported.
 
 `gh release verify` confirms GitHub's signed, immutable release;
 `verify-asset` ties the download to its exact release asset; and the checksum
-manifest verifies its bytes. `gh attestation verify` checks GitHub's build
-provenance for this repository. Each archive also has an SPDX SBOM named
-`$archive.sbom.json`. These checks prove origin and integrity, not code safety.
+manifest verifies its bytes. `gh attestation verify` requires provenance from
+this repository's release workflow and the selected version tag. Each archive
+also has an SPDX SBOM named `$archive.sbom.json`. These checks prove origin and
+integrity, not code safety.
 
 The macOS archives are not code-signed or notarized. An AUR package
 ([#34](https://github.com/allisonmahmood/nt/issues/34)) and Homebrew tap
