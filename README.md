@@ -48,6 +48,22 @@ Go-toolchain builds report `nt version dev`; `go version -m` verifies the tagged
 module version. GitHub build attestations cover release archives, not local
 builds.
 
+### Arch Linux
+
+The checked-in [`nt`](packaging/arch/nt/PKGBUILD) package builds the tagged
+source, while [`nt-bin`](packaging/arch/nt-bin/PKGBUILD) installs the prebuilt
+Linux archive and verifies it against the release's `checksums.txt`.
+
+```sh
+git clone https://github.com/allisonmahmood/NT
+cd NT/packaging/arch/nt       # or NT/packaging/arch/nt-bin for the prebuilt archive
+makepkg -si
+nt --version
+```
+
+These commands require the v0.1.0 release. Publishing both packages to the AUR
+is pending; until then, build them from these repository paths.
+
 ### Release archive
 
 These commands require an authenticated [`gh`](https://cli.github.com/). Paste
@@ -122,9 +138,8 @@ this repository's release workflow and the selected version tag. Each archive
 also has an SPDX SBOM named `$archive.sbom.json`. These checks prove origin and
 integrity, not code safety.
 
-The macOS archives are not code-signed or notarized. An AUR package
-([#34](https://github.com/allisonmahmood/nt/issues/34)) and Homebrew tap
-([#28](https://github.com/allisonmahmood/nt/issues/28)) are not published yet.
+The macOS archives are not code-signed or notarized. A Homebrew tap
+([#28](https://github.com/allisonmahmood/nt/issues/28)) is not published yet.
 
 ### Shell integration
 

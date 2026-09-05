@@ -1,0 +1,32 @@
+# Maintainer: Allison Mahmood
+
+pkgname=nt
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Git worktrees, minus the ceremony'
+arch=('x86_64' 'aarch64')
+url='https://github.com/allisonmahmood/NT'
+license=('MIT')
+depends=('git')
+makedepends=('go')
+options=('!debug')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+# After v0.1.0 is published, replace SKIP with `makepkg -g` output and regenerate .SRCINFO.
+sha256sums=('SKIP')
+
+build() {
+  cd "NT-$pkgver"
+  export CGO_CPPFLAGS="${CPPFLAGS}"
+  export CGO_CFLAGS="${CFLAGS}"
+  export CGO_CXXFLAGS="${CXXFLAGS}"
+  export CGO_LDFLAGS="${LDFLAGS}"
+  export GOFLAGS="-buildmode=pie -trimpath -mod=readonly -modcacherw"
+  export GOTOOLCHAIN=local
+  go build -ldflags="-linkmode=external -X main.version=$pkgver" -o nt .
+}
+
+package() {
+  cd "NT-$pkgver"
+  install -Dm755 nt "$pkgdir/usr/bin/nt"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}
