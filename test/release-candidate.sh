@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Verify cross-compiled metadata and execute the native release candidate.
+# Verify cross-compiled metadata, per-archive SBOMs, and execute the native release candidate.
 set -euo pipefail
 
 readonly dist_dir="dist"
@@ -30,6 +30,20 @@ for target in "${targets[@]}"; do
   archive="$dist_dir/nt_${expected_version}_${target}.tar.gz"
   if [[ ! -f "$archive" ]]; then
     echo "missing release archive: $archive" >&2
+    exit 1
+  fi
+
+  sbom="$archive.sbom.json"
+  if [[ ! -f "$sbom" ]]; then
+    echo "missing SBOM: $sbom" >&2
+    exit 1
+  fi
+  if ! grep -q '"spdxVersion"' "$sbom"; then
+    echo "SBOM is not SPDX JSON: $sbom" >&2
+    exit 1
+  fi
+  if ! grep -q "  $(basename "$sbom")\$" "$checksum_file"; then
+    echo "SBOM not listed in checksum manifest: $sbom" >&2
     exit 1
   fi
 
