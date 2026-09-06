@@ -1,0 +1,41 @@
+# Maintainer: Allison Mahmood
+
+pkgname=nt-bin
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Git worktrees, minus the ceremony (prebuilt binary)'
+arch=('x86_64' 'aarch64')
+url='https://github.com/allisonmahmood/NT'
+license=('MIT')
+depends=('git')
+provides=("nt=$pkgver")
+conflicts=('nt')
+options=('!strip' '!debug')
+source=("$url/releases/download/v$pkgver/checksums.txt")
+source_x86_64=("$url/releases/download/v$pkgver/nt_${pkgver}_linux_amd64.tar.gz")
+source_aarch64=("$url/releases/download/v$pkgver/nt_${pkgver}_linux_arm64.tar.gz")
+noextract=(
+  "nt_${pkgver}_linux_amd64.tar.gz"
+  "nt_${pkgver}_linux_arm64.tar.gz"
+)
+sha256sums=('a5ffa4a10cf5d4ab46f7b9507abff20bbe43f873ac81acddbdcfcd9efd7c625c')
+sha256sums_x86_64=('51643c98285c437828bbde95dfe9e02749bcc64c12583c9471fc0f20e8425f8e')
+sha256sums_aarch64=('cfa27af781b59fd4a0a86d84c67410d75493a2b9fc91d82e479b2645e838c8bb')
+
+prepare() {
+  local release_arch archive
+  if [[ "$CARCH" == aarch64 ]]; then
+    release_arch=arm64
+  else
+    release_arch=amd64
+  fi
+  archive="nt_${pkgver}_linux_${release_arch}.tar.gz"
+
+  awk -v archive="$archive" '$2 == archive { print }' checksums.txt | sha256sum --check
+  bsdtar -xf "$archive"
+}
+
+package() {
+  install -Dm755 nt "$pkgdir/usr/bin/nt"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

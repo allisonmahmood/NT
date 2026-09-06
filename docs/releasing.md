@@ -35,8 +35,13 @@ The command checks the live repository immutability setting, GitHub's validation
 of the signed tag, its exact commit, main ancestry, successful CI and release
 runs, the draft asset set, and the downloaded binaries and attestations. Only
 then does it publish and verify GitHub's immutable release and asset attestations.
-It runs the binary for the local architecture; exercise the other architecture
-on native hardware when available.
+GitHub's release attestation can take a short time to appear after publication.
+If the final verification reports `no attestations`, the release is already
+published: retry `gh release verify` and `gh release verify-asset` after it appears.
+Do not recreate the tag or release. Build attestations were verified before publication.
+
+The command runs the binary for the local architecture; exercise the other
+architecture on native hardware when available.
 
 This boundary deliberately uses the maintainer's existing CLI authentication.
 The [immutability setting API](https://docs.github.com/en/rest/repos/repos#check-if-immutable-releases-are-enabled-for-a-repository)
@@ -48,15 +53,13 @@ publication is running.
 ## Finish installation validation
 
 - Follow the README's archive installation and shell setup in a clean directory.
-- For the first release, finish #42: replace all `SKIP` hashes in both Arch recipes
-  with hashes of the verified published inputs; regenerate both `.SRCINFO` files.
-  Build both recipes from fresh downloads with `makepkg`, inspect with `namcap`,
-  and confirm `nt --version`. Keep #34 open until these checks pass.
-- Ensure Arch CI builds the published source once its checksum is pinned; a
-  synthetic HEAD archive cannot use the published source hash.
+- Update the version and hashes in both Arch recipes using the verified published
+  inputs; regenerate both `.SRCINFO` files. Build both recipes from fresh downloads
+  with `makepkg`, inspect with `namcap`, and confirm `nt --version`.
+- Arch CI exercises HEAD with a temporary recipe and its own computed checksum;
+  separately test the unmodified release recipes against published downloads.
 - Exercise create, cd, home, completion, dirty-worktree refusal, and removal
   through the installed shell hook. Confirm update and removal instructions.
 - Verify GitHub has no unresolved dependency, code-scanning or secret-scanning
   alerts. Classify advisory Scorecard findings against `SECURITY.md`.
-- Remove the README's pre-release notice and close #26 only after publication
-  and installation verification are complete.
+- Update the README's release version after publication and installation verification.
