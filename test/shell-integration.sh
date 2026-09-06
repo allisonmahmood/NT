@@ -47,7 +47,7 @@ for shell in bash zsh fish; do
     case "$shell" in
       bash) bash --noprofile --norc -c 'eval "$(nt init bash)"; complete -p nt || exit 1; source "$NT_TEST_BEHAVIOR"' ;;
       zsh) zsh -f -c 'autoload -Uz compinit; compinit -D -u; eval "$(nt init zsh)"; test "${_comps[nt]}" = _nt || exit 1; source "$NT_TEST_BEHAVIOR"' ;;
-      fish) fish --no-config -c 'nt init fish | source; complete | string match -q "*__start_nt*"; or exit 1; source "$NT_TEST_BEHAVIOR"' ;;
+      fish) fish --no-config -c 'nt init fish | source; complete | string match -q "*__nt_prepare_completions*"; or exit 1; source "$NT_TEST_BEHAVIOR"' ;;
     esac
   )
   echo "$shell: shell integration passed"
