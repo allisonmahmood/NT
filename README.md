@@ -25,7 +25,7 @@ no scattering them across `/tmp`, no losing track of where they went:
 
 ## Install
 
-**[v0.1.0](https://github.com/allisonmahmood/NT/releases/tag/v0.1.0)** is available
+**[v0.1.1](https://github.com/allisonmahmood/NT/releases/tag/v0.1.1)** is available
 for Linux x86-64 and ARM64. Install a binary or local Arch package, then add your
 shell hook below.
 
@@ -35,8 +35,8 @@ With Go 1.25 or newer:
 
 ```sh
 mkdir -p "$HOME/.local/bin"
-GOBIN="$HOME/.local/bin" go install github.com/allisonmahmood/nt@v0.1.0
-go version -m "$HOME/.local/bin/nt" | grep 'mod.*github.com/allisonmahmood/nt.*v0.1.0'
+GOBIN="$HOME/.local/bin" go install github.com/allisonmahmood/nt@v0.1.1
+go version -m "$HOME/.local/bin/nt" | grep 'mod.*github.com/allisonmahmood/nt.*v0.1.1'
 ```
 
 To build the current development source instead:
@@ -76,7 +76,7 @@ your shell's error-handling settings.
 ```sh
 (
 set -euo pipefail
-version=v0.1.0
+version=v0.1.1
 platform="linux_$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')"
 archive="nt_${version#v}_${platform}.tar.gz"
 mkdir -p "nt-$version-$platform"
@@ -100,7 +100,7 @@ install -m 0755 nt "$HOME/.local/bin/nt"
 )
 ```
 
-A v0.1.0 archive must report `nt version 0.1.0`. Release archives support Linux
+A v0.1.1 archive must report `nt version 0.1.1`. Release archives support Linux
 on x86-64 (`amd64`) and ARM64 (`arm64`). macOS and Windows releases are not
 currently supported.
 

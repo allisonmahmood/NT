@@ -1,7 +1,7 @@
 # Maintainer: Allison Mahmood
 
 pkgname=nt
-pkgver=0.1.0
+pkgver=0.1.1
 pkgrel=1
 pkgdesc='Git worktrees, minus the ceremony'
 arch=('x86_64' 'aarch64')
@@ -11,7 +11,7 @@ depends=('git')
 makedepends=('go')
 options=('!debug')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('f89a8ec231dad7a5df47e02d684302870d2e9999dcdfee31c02f6cc7a7c41d12')
+sha256sums=('f95d916c900811ca13f480b74e4eb9c137f30168453ef5862052ddb5b81f11e4')
 
 build() {
   cd "NT-$pkgver"

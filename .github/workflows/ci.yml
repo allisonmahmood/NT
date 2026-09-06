@@ -65,8 +65,6 @@ jobs:
   arch-package:
     runs-on: ubuntu-latest
     container: archlinux:base-devel
-    env:
-      PKGVER: "0.1.0"
     steps:
       - name: Install Arch packaging tools
         run: pacman --sync --refresh --sysupgrade --noconfirm git go namcap
@@ -74,6 +72,8 @@ jobs:
       - name: Prepare a temporary package recipe for current source
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          PKGVER="$(awk '$1 == "pkgver" { print $3 }' packaging/arch/nt/.SRCINFO)"
+          echo "PKGVER=$PKGVER" >> "$GITHUB_ENV"
           # Exercise HEAD without modifying the release recipe or its pinned checksum.
           mkdir -p "$RUNNER_TEMP/nt-package"
           cp packaging/arch/nt/PKGBUILD "$RUNNER_TEMP/nt-package/PKGBUILD"
