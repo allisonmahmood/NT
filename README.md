@@ -249,7 +249,8 @@ continues to leave your unfinished work where it was.
 
 `--take` requires a new branch and destination and cannot be combined with a base.
 It refuses interrupted Git operations, submodules, nested repositories/worktrees,
-intent-to-add, and hidden index flags. Ignored environment/build files and unsaved
+tracked files replaced by directories or special files, intent-to-add, and hidden
+index flags. Ignored environment/build files and unsaved
 editor buffers stay where they are. Existing local commits stay on the source
 branch too; NT never rewinds home to move committed work away.
 

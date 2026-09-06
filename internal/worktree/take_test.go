@@ -1,6 +1,7 @@
 package worktree
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -162,5 +163,54 @@ func TestTakeFailedApplyRetainsRecoverableSnapshot(t *testing.T) {
 	}
 	if got := runGit(t, r.MainDir, "show", "refs/stash:README"); got != "recover me" {
 		t.Fatal("failed transfer lost work:", got)
+	}
+}
+
+func TestTakeRefusesTrackedDirectoryReplacement(t *testing.T) {
+	for _, original := range []string{"file", "symlink"} {
+		for _, nested := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/nested=%t", original, nested), func(t *testing.T) {
+				r := takeFixture(t)
+				dir := r.MainDir
+				victim := filepath.Join(dir, "tool")
+				if original == "file" {
+					writeFile(t, victim, "original blob")
+				} else if err := os.Symlink("README", victim); err != nil {
+					t.Fatal(err)
+				}
+				runGit(t, dir, "add", "tool")
+				runGit(t, dir, "commit", "-qm", "tracked path")
+				if err := os.Remove(victim); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Mkdir(victim, 0o755); err != nil {
+					t.Fatal(err)
+				}
+				writeFile(t, filepath.Join(victim, "secret"), "must survive")
+				if nested {
+					runGit(t, victim, "init", "-q", "-b", "main")
+					runGit(t, victim, "add", "secret")
+					runGit(t, victim, "commit", "-qm", "private work")
+				}
+				before := runGit(t, dir, "status", "--porcelain")
+				if _, err := Take(r, dir, "task"); err == nil {
+					t.Fatal("directory replacement accepted")
+				}
+				if data, err := os.ReadFile(filepath.Join(victim, "secret")); err != nil || string(data) != "must survive" {
+					t.Fatal("uncaptured content changed", err)
+				}
+				if nested {
+					if got := runGit(t, victim, "log", "-1", "--format=%s"); got != "private work" {
+						t.Fatal("nested repository changed")
+					}
+				}
+				if runGit(t, dir, "status", "--porcelain") != before || runGit(t, dir, "stash", "list") != "" || runGit(t, dir, "for-each-ref", "--format=%(refname)", "refs/heads/task") != "" {
+					t.Fatal("refusal modified the source, created a branch, or captured work")
+				}
+				if _, err := os.Lstat(r.Dest("task")); !os.IsNotExist(err) {
+					t.Fatal("destination created before refusal")
+				}
+			})
+		}
 	}
 }

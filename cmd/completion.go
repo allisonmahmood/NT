@@ -10,8 +10,8 @@ import (
 	"github.com/allisonmahmood/nt/internal/worktree"
 )
 
-// completeCreate offers every local+remote branch short-name (for both the
-// branch arg and the base arg) — the same candidates the zsh _nt produced.
+// completeCreate offers local+remote branches for the branch and base args,
+// except with --take, which requires a new branch.
 func completeCreate(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	if take, _ := cmd.Flags().GetBool("take"); take {
 		return nil, cobra.ShellCompDirectiveNoFileComp

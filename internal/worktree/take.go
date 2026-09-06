@@ -146,6 +146,21 @@ func checkTakeFiles(source string) error {
 	if !ok || !valid {
 		return fmt.Errorf("cannot inspect tracked paths")
 	}
+	// Git can ignore a repository that replaced a tracked blob, then overwrite
+	// its directory while restoring HEAD. Inspect the path itself as well as
+	// its parents before stash gets any chance to remove uncaptured content.
+	for _, path := range strings.Split(tracked+"\x00"+committed, "\x00") {
+		if path == "" {
+			continue
+		}
+		entry, err := os.Lstat(filepath.Join(source, path))
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil || (!entry.Mode().IsRegular() && entry.Mode()&os.ModeSymlink == 0) {
+			return fmt.Errorf("tracked path %q was replaced by a directory or special file; handle it manually", path)
+		}
+	}
 	if err := checkNestedRepos(source, files+"\x00"+tracked+"\x00"+committed); err != nil {
 		return err
 	}
