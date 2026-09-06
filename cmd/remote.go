@@ -1,0 +1,44 @@
+package cmd
+
+import (
+	"github.com/allisonmahmood/nt/internal/config"
+	"github.com/allisonmahmood/nt/internal/git"
+	"github.com/allisonmahmood/nt/internal/worktree"
+)
+
+// fetchedRemote pins the default-branch tip so creation and home maintenance
+// agree even when another process fetches again during this invocation.
+type fetchedRemote struct {
+	name    string
+	branch  string
+	commit  string
+	fetched bool
+}
+
+func fetchRemote(r *worktree.Repo) fetchedRemote {
+	remote := fetchedRemote{name: config.Remote(), branch: "main"}
+	if !git.OK(r.MainDir, "remote", "get-url", remote.name) {
+		remote.name = ""
+		return remote
+	}
+	if !config.NoFetch() {
+		info("fetching %s ...", remote.name)
+		remote.fetched = git.Run(r.MainDir, "fetch", "--quiet", remote.name)
+		if !remote.fetched {
+			warn("warning: fetch failed, using cached refs for creation; home left unchanged")
+		}
+	}
+	remote.branch = git.DefaultBranch(r.MainDir, remote.name)
+	remote.commit, _ = git.Query(r.MainDir, "rev-parse", "--verify", "refs/remotes/"+remote.name+"/"+remote.branch+"^{commit}")
+	return remote
+}
+
+func refreshHome(r *worktree.Repo, remote fetchedRemote, action worktree.HomeAction) {
+	if !remote.fetched || remote.commit == "" {
+		if action != worktree.HomeMaintenance {
+			info("home left unchanged: no freshly fetched default branch (offline, fetch disabled/failed, or no remote)")
+		}
+		return
+	}
+	info("%s", worktree.RefreshHome(r.MainDir, remote.name, remote.branch, remote.commit, action))
+}

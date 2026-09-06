@@ -93,6 +93,7 @@ func newRmCmd() *cobra.Command {
 			// Relocate only once the tree we were standing in is actually gone — a
 			// refused removal must leave the shell where it is, not yank it to main.
 			if stepOut && !pathExists(pwd) {
+				refreshHome(r, fetchRemote(r), worktree.HomeReturn)
 				shell.SignalCD(r.MainDir)
 			}
 			if rc != 0 {

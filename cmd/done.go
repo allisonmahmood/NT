@@ -9,6 +9,7 @@ import (
 	"github.com/allisonmahmood/nt/internal/git"
 	"github.com/allisonmahmood/nt/internal/shell"
 	"github.com/allisonmahmood/nt/internal/ui"
+	"github.com/allisonmahmood/nt/internal/worktree"
 )
 
 func newDoneCmd() *cobra.Command {
@@ -79,6 +80,7 @@ func newDoneCmd() *cobra.Command {
 				os.Exit(1)
 			}
 			if inTree {
+				refreshHome(r, fetchRemote(r), worktree.HomeReturn)
 				shell.SignalCD(r.MainDir)
 			}
 			info("removed %s", target)

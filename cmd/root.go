@@ -5,6 +5,10 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/allisonmahmood/nt/internal/git"
+	"github.com/allisonmahmood/nt/internal/shell"
+	"github.com/allisonmahmood/nt/internal/worktree"
+
 	"github.com/spf13/cobra"
 
 	"github.com/allisonmahmood/nt/internal/ui"
@@ -21,6 +25,7 @@ func SetVersion(v string) {
 }
 
 func newRootCmd() *cobra.Command {
+	var take bool
 	root := &cobra.Command{
 		Use:     "nt [branch] [base]",
 		Version: version,
@@ -34,16 +39,35 @@ cd in, and get out of your way. Worktrees live next to the main checkout in
   nt rm   [-f] [target] remove worktree(s) (multi-picker if target omitted)
   nt done [-f] [target] remove a worktree AND delete its local branch
   nt prune              prune stale worktrees + empty dirs; offer to delete gone branches
-  nt home               cd back to the main checkout
+  nt home               safely refresh the main checkout and cd home
+  nt <branch> --take     take uncommitted work into a new worktree
   nt ls                 list this repo's worktrees, with dirty/ahead-behind
 
 Add the shell integration to your rc file:  eval "$(nt init zsh)"`,
-		Args:          cobra.ArbitraryArgs,
+		Args:          cobra.MaximumNArgs(2),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		// Bare `nt` = hint line + ls; `nt <branch> [base]` = create/switch.
 		RunE: func(cmd *cobra.Command, args []string) error {
 			r := loadRepo()
+			if take {
+				if len(args) != 1 {
+					return fmt.Errorf("--take requires one new branch name and no base")
+				}
+				source, ok := git.Query("", "rev-parse", "--show-toplevel")
+				if !ok {
+					return fmt.Errorf("cannot locate source worktree")
+				}
+				snapshot, err := worktree.Take(r, source, args[0])
+				if err != nil {
+					return err
+				}
+				info("moved uncommitted work; staged changes preserved; recovery retained in git stash list (%s)", snapshot)
+				refreshHome(r, fetchRemote(r), worktree.HomeMaintenance)
+				shell.SignalCD(r.Dest(args[0]))
+				info("→ %s", r.Dest(args[0]))
+				return nil
+			}
 			if len(args) == 0 {
 				fmt.Println("nt <branch> | nt cd | nt rm | nt done | nt prune | nt home | nt ls   (nt -h for help)")
 				fmt.Println(ui.Render(r))
@@ -54,6 +78,8 @@ Add the shell integration to your rc file:  eval "$(nt init zsh)"`,
 		},
 		ValidArgsFunction: completeCreate,
 	}
+
+	root.Flags().BoolVar(&take, "take", false, "Take uncommitted work at its current base into a new worktree (excludes ignored files and unsaved buffers)")
 
 	root.AddCommand(
 		newCdCmd(),
