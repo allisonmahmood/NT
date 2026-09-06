@@ -1,7 +1,7 @@
 # Maintainer: Allison Mahmood
 
 pkgname=nt-bin
-pkgver=0.1.0
+pkgver=0.1.1
 pkgrel=1
 pkgdesc='Git worktrees, minus the ceremony (prebuilt binary)'
 arch=('x86_64' 'aarch64')
@@ -18,9 +18,9 @@ noextract=(
   "nt_${pkgver}_linux_amd64.tar.gz"
   "nt_${pkgver}_linux_arm64.tar.gz"
 )
-sha256sums=('a5ffa4a10cf5d4ab46f7b9507abff20bbe43f873ac81acddbdcfcd9efd7c625c')
-sha256sums_x86_64=('51643c98285c437828bbde95dfe9e02749bcc64c12583c9471fc0f20e8425f8e')
-sha256sums_aarch64=('cfa27af781b59fd4a0a86d84c67410d75493a2b9fc91d82e479b2645e838c8bb')
+sha256sums=('d7f38cbce32f981d0bd96e599dfa2f96a64d49bac0bf8d903f0ec1d1530afbac')
+sha256sums_x86_64=('7cf64cc8907d33dd01e13de3d07df6bfcaccd529978e238384c27f2a80cccb60')
+sha256sums_aarch64=('6103a5656563ab2ce04ee170cf608b7878f2a795294e252e245ceaf311c64976')
 
 prepare() {
   local release_arch archive
