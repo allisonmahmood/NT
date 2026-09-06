@@ -35,6 +35,13 @@ nt done feature || exit 1
 test "$PWD" = "$NT_TEST_REPO" || exit 1
 test ! -d "$NT_TEST_REPO.worktrees/feature" || exit 1
 ! git show-ref --verify --quiet refs/heads/feature || exit 1
+printf taken >> README
+nt captured --take || exit 1
+test "$PWD" = "$NT_TEST_REPO.worktrees/captured" || exit 1
+command grep -q taken README || exit 1
+git restore README || exit 1
+nt done captured || exit 1
+test "$PWD" = "$NT_TEST_REPO" || exit 1
 BEHAVIOR
 export NT_TEST_BEHAVIOR="$fixture_root/behavior"
 for shell in bash zsh fish; do

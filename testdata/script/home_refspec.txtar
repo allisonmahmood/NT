@@ -1,0 +1,33 @@
+# A successful fetch need not update origin/main with a custom fetch refspec.
+env NT_NO_FETCH=
+exec git init -q --bare -b main origin
+exec git clone -q origin repo
+cd repo
+exec git commit -q --allow-empty -m initial
+exec git push -q origin main
+exec git branch feature
+exec git push -q origin feature
+exec nt home
+cd ..
+exec git clone -q origin publisher
+cd publisher
+exec git commit -q --allow-empty -m incoming
+exec git push -q origin main
+exec git rev-parse HEAD
+cp stdout ../incoming-head
+cd ../repo
+exec git config remote.origin.fetch '+refs/heads/feature:refs/remotes/origin/feature'
+exec nt task
+stdout 'home updated by 1'
+exec git rev-parse HEAD
+cmp stdout ../incoming-head
+exec git -C ../repo.worktrees/task rev-parse HEAD
+cmp stdout ../incoming-head
+
+# If the default branch was not fetched, never claim its cached tip is fresh.
+exec git reset --hard HEAD~1
+exec git config --unset branch.main.merge
+exec nt home
+stdout 'no freshly fetched default branch'
+exec git log -1 --format=%s
+stdout 'initial'

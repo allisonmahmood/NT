@@ -1,0 +1,95 @@
+# A non-main, slashed default branch on a configured remote.
+env NT_NO_FETCH=
+env NT_REMOTE=upstream
+env NT_CD_FILE=$WORK/cdf
+exec git init -q --bare -b release/v2 origin
+exec git clone -q -o upstream origin repo
+cd repo
+cp ../readme README
+exec git add README
+exec git commit -qm initial
+exec git push -q upstream release/v2
+exec git remote set-head upstream -a
+exec nt home
+stdout 'home is current'
+
+cd ..
+exec git clone -q origin publisher
+cd publisher
+cp ../incoming incoming
+exec git add incoming
+exec git commit -qm incoming
+exec git push -q origin release/v2
+cd ../repo
+
+# Creation advances eligible home to the same fetched snapshot.
+exec nt task
+stdout 'home updated by 1'
+exec git rev-parse HEAD
+cp stdout ../home-head
+exec git -C ../repo.worktrees/task rev-parse HEAD
+cmp stdout ../home-head
+exec nt home
+stdout '1 new commits since your last nt home'
+exec nt home
+! stdout 'since your last'
+
+# A deliberate rewind stays put during automatic maintenance and plain cd.
+exec git reset --hard HEAD~1
+exec nt second-task
+stdout 'changed outside NT'
+! exists incoming
+exec nt cd release/v2
+! stdout 'fetching'
+! exists incoming
+exec nt home
+exists incoming
+
+# Dirty home does not block new work or home navigation.
+cp ../dirty README
+exec nt third-task
+stdout 'uncommitted changes'
+stdout '--take'
+exec nt home
+stdout 'home left unchanged'
+cmp README ../dirty
+exec git restore README
+
+# Offline home neither advances nor claims to be current.
+exec git reset --hard HEAD~1
+env NT_NO_FETCH=1
+exec nt home
+stdout 'home left unchanged'
+! stdout 'home is current'
+! exists incoming
+env NT_NO_FETCH=
+exec git remote set-url upstream ../missing-remote
+exec nt home
+stderr 'fetch failed'
+! exists incoming
+exec git remote set-url upstream ../origin
+exec nt home
+exists incoming
+
+# Returning after removing the current tree refreshes even without a baseline.
+exec git reset --hard HEAD~1
+rm .git/nt-home.json
+cd ../repo.worktrees/task
+exec nt done task
+stdout 'home updated by 1'
+grep '/repo$' $WORK/cdf
+exists ../../repo/incoming
+cd ../../repo
+exec git reset --hard HEAD~1
+cd ../repo.worktrees/second-task
+exec nt rm second-task
+stdout 'home updated by 1'
+grep '/repo$' $WORK/cdf
+exists ../../repo/incoming
+
+-- readme --
+initial
+-- incoming --
+incoming
+-- dirty --
+unfinished investigation

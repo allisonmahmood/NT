@@ -176,7 +176,8 @@ quoting games.
 | `nt rm [-f] [target...]` | nuke worktree(s) (multi-picker if no target) |
 | `nt done [-f] [target]` | nuke a worktree **and** delete its local branch |
 | `nt prune` | tidy up: drop stale worktrees + empty dirs, offer to delete gone branches |
-| `nt home` | `cd` back to the main checkout, wherever you are |
+| `nt home` | safely refresh the main checkout and `cd` home, even when already there |
+| `nt <new-branch> --take` | take uncommitted work into a new worktree at its current base |
 | `nt ls` | list this repo's worktrees, with dirty + ahead/behind |
 | `nt` / `nt -h` | list + hint / full usage |
 
@@ -194,6 +195,73 @@ local copy:
   it just tells you and uses your copy.
 - **already has a worktree** → skips the theatrics and `cd`s you there
 - `nt <name> <base>` → fork the new branch off an explicit base instead
+
+### A current home, and a place for unfinished work
+
+`nt home` fetches your configured remote and fast-forwards the original checkout
+when it is clean and on that remote's default branch. It works from home too;
+there is no separate sync command. `nt cd main` is still navigation only. When
+`nt done` or `nt rm` removes your current worktree, returning home attempts the
+same safe refresh. A blocked refresh never prevents the directory change.
+
+After a successful home refresh, new worktree creation also keeps home current
+using the same fetched default-branch commit. NT remembers the branch, remote,
+and commit it established there. If you move home to another commit or branch
+yourself, automatic maintenance pauses until you run `nt home` successfully.
+This intentionally also pauses after a harmless manual pull. The first automatic
+attempt leaves an unknown checkout alone and tells you to run `nt home` once.
+
+Edits, staged changes, untracked files, local-only commits, interrupted Git
+operations, submodules, and uncertain index states leave home untouched. Updates
+are fast-forward only, protect ignored-file collisions, and do not run repository
+hooks, autostash, rebase, reset, or switch branches. Fetch failures and
+`NT_NO_FETCH=1` leave home as it is, without claiming it is current. New worktrees
+can still use cached refs as before.
+
+An explicit `nt home` also reports how many new commits arrived since your last
+successful `nt home`, including updates NT already made while you were elsewhere.
+Ordinary shell `cd` visits are not tracked. State is local to the repository's
+shared Git directory, never committed or pushed.
+
+To disable opportunistic home updates in a repository:
+
+```sh
+git config --local nt.autoRefreshHome false
+```
+
+Explicit returns (`nt home`, or removal of your current worktree) still attempt
+refresh. A clean Git status cannot reveal unsaved editor buffers or a running
+demo: use this setting when home needs to stay fixed while agents create work.
+NT serializes its own home refreshes and transfers; this does not lock out
+external Git commands or editors.
+
+If an investigation at home has become a task, give it a worktree:
+
+```sh
+nt checkout-fix --take
+```
+
+This transfers staged, unstaged, and ordinary untracked files from your current
+worktree, preserving binary files, symlinks, and the staging split. The new branch
+starts at the exact commit you were editing, even if the remote has advanced.
+Home can then catch up independently if eligible. Without `--take`, creation
+continues to leave your unfinished work where it was.
+
+`--take` requires a new branch and destination and cannot be combined with a base.
+It refuses interrupted Git operations, submodules, nested repositories/worktrees,
+tracked files replaced by directories or special files, intent-to-add, and hidden
+index flags. Ignored environment/build files and unsaved
+editor buffers stay where they are. Existing local commits stay on the source
+branch too; NT never rewinds home to move committed work away.
+
+Every transfer leaves a named `nt-take-…` recovery stash, including on success.
+The command prints its name before capturing work and its commit after success.
+This avoids deleting another worktree's stash during concurrent Git use. Inspect
+`git stash list` and drop the named entry yourself once you no longer need it.
+If interrupted, inspect both directories and that stash before retrying. In a
+clean checkout at the original base, `git stash apply --index <printed-commit>`
+restores the captured work; a failed destination apply leaves its partial work
+and the recovery stash intact and does not refresh home.
 
 ### Housekeeping
 

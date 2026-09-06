@@ -3,9 +3,7 @@ package cmd
 import (
 	"os"
 	"path/filepath"
-	"strings"
 
-	"github.com/allisonmahmood/nt/internal/config"
 	"github.com/allisonmahmood/nt/internal/git"
 	"github.com/allisonmahmood/nt/internal/shell"
 	"github.com/allisonmahmood/nt/internal/worktree"
@@ -28,39 +26,9 @@ func runCreate(r *worktree.Repo, args []string) {
 		return
 	}
 
-	// Resolve remote + default branch, fetch latest refs.
-	remote := config.Remote()
-	if !git.OK(r.MainDir, "remote", "get-url", remote) {
-		remote = ""
-	}
-	if remote != "" && !config.NoFetch() {
-		info("fetching %s ...", remote)
-		// Run (not RunQuiet) so git's own stderr (auth/network diagnostics) reaches
-		// the terminal on failure, as the zsh original did; --quiet keeps success
-		// silent.
-		if !git.Run(r.MainDir, "fetch", "--quiet", remote) {
-			warn("warning: fetch failed, using cached refs")
-		}
-	}
-
-	defaultBranch := ""
-	if remote != "" {
-		if ref, ok := git.Query(r.MainDir, "symbolic-ref", "--quiet", "refs/remotes/"+remote+"/HEAD"); ok {
-			// Strip the full "refs/remotes/<remote>/" prefix, not just up to the
-			// last '/', so a slashed default branch (e.g. release/v2) survives.
-			defaultBranch = strings.TrimPrefix(ref, "refs/remotes/"+remote+"/")
-		}
-	}
-	if defaultBranch == "" {
-		switch {
-		case remote != "" && git.OK(r.MainDir, "show-ref", "--quiet", "--verify", "refs/remotes/"+remote+"/main"):
-			defaultBranch = "main"
-		case remote != "" && git.OK(r.MainDir, "show-ref", "--quiet", "--verify", "refs/remotes/"+remote+"/master"):
-			defaultBranch = "master"
-		default:
-			defaultBranch = "main"
-		}
-	}
+	// Fetch once and pin the default tip for both creation and home maintenance.
+	fetched := fetchRemote(r)
+	remote, defaultBranch := fetched.name, fetched.branch
 
 	// Build target path (branch may contain '/').
 	dest := r.Dest(branch)
@@ -99,6 +67,8 @@ func runCreate(r *worktree.Repo, args []string) {
 		}
 		var start string
 		switch {
+		case remote != "" && want == defaultBranch && fetched.commit != "":
+			start = fetched.commit
 		case remote != "" && git.OK(r.MainDir, "show-ref", "--quiet", "--verify", "refs/remotes/"+remote+"/"+want):
 			start = remote + "/" + want
 		case git.OK(r.MainDir, "show-ref", "--quiet", "--verify", "refs/heads/"+want):
@@ -118,6 +88,7 @@ func runCreate(r *worktree.Repo, args []string) {
 		fail("git worktree add failed")
 	}
 
+	refreshHome(r, fetched, worktree.HomeMaintenance)
 	shell.SignalCD(dest)
 	info("→ %s  (branch: %s)", dest, branch)
 }

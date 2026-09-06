@@ -1,0 +1,37 @@
+exec git init -q -b main repo
+cd repo
+cp ../readme README
+exec git add README
+exec git commit -qm initial
+cp ../dirty README
+env NT_CD_FILE=$WORK/cdf
+
+# Offline/no-remote creation still points dirty home toward an explicit take.
+exec nt independent
+stdout '--take'
+cmp README ../dirty
+
+# Invalid combinations must not disturb the source.
+! exec nt task main --take
+cmp README ../dirty
+! exists ../repo.worktrees/task
+
+exec nt task --take
+stdout 'staged changes preserved'
+grep '/task$' $WORK/cdf
+cmp README ../readme
+cmp ../repo.worktrees/task/README ../dirty
+
+# Existing targets cannot absorb another task's work.
+cp ../dirty README
+! exec nt task --take
+cmp README ../dirty
+exec nt --help
+stdout '--take'
+exec nt __complete --take ''
+! stdout '^main$'
+
+-- readme --
+initial
+-- dirty --
+unfinished
