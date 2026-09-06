@@ -71,19 +71,23 @@ jobs:
       - name: Install Arch packaging tools
         run: pacman --sync --refresh --sysupgrade --noconfirm git go namcap
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - name: Create an unpublished source archive
+      - name: Prepare a temporary package recipe for current source
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          # Until v0.1.0 is tagged, exercise the PKGBUILD against the current source tree.
+          # Exercise HEAD without modifying the release recipe or its pinned checksum.
+          mkdir -p "$RUNNER_TEMP/nt-package"
+          cp packaging/arch/nt/PKGBUILD "$RUNNER_TEMP/nt-package/PKGBUILD"
           git archive --format=tar.gz --prefix="NT-${PKGVER}/" \
-            --output="packaging/arch/nt/nt-${PKGVER}.tar.gz" HEAD
+            --output="$RUNNER_TEMP/nt-package/nt-${PKGVER}.tar.gz" HEAD
+          source_hash="$(sha256sum "$RUNNER_TEMP/nt-package/nt-${PKGVER}.tar.gz" | cut -d ' ' -f 1)"
+          sed -i "s/^sha256sums=.*/sha256sums=('$source_hash')/" "$RUNNER_TEMP/nt-package/PKGBUILD"
           useradd --create-home builder
-          chown --recursive builder:builder "$GITHUB_WORKSPACE"
+          chown --recursive builder:builder "$RUNNER_TEMP/nt-package"
       - name: Build and inspect the source package
         run: |
-          su --login builder --command "cd '$GITHUB_WORKSPACE/packaging/arch/nt' && makepkg --noconfirm --cleanbuild"
-          package="packaging/arch/nt/nt-${PKGVER}-1-x86_64.pkg.tar.zst"
-          namcap packaging/arch/nt/PKGBUILD "$package"
+          su --login builder --command "cd '$RUNNER_TEMP/nt-package' && makepkg --noconfirm --cleanbuild"
+          package="$RUNNER_TEMP/nt-package/nt-${PKGVER}-1-x86_64.pkg.tar.zst"
+          namcap "$RUNNER_TEMP/nt-package/PKGBUILD" "$package"
           mkdir package-root
           bsdtar -xf "$package" -C package-root
           test "$(package-root/usr/bin/nt --version)" = "nt version ${PKGVER}"

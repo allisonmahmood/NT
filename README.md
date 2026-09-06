@@ -141,7 +141,11 @@ For an archive installation, repeat the verified archive instructions with the
 new release version. Use a fresh download directory. For a Go installation,
 repeat `go install` with the new version. Start a new shell after updating.
 
-To uninstall a binary installed by either method:
+For a local Arch package, update this checkout and rerun `makepkg -si` in the
+same recipe directory. To uninstall it, run `sudo pacman -R nt` (or `nt-bin`,
+whichever you installed), then remove the shell hook as described below.
+
+To uninstall a binary installed from an archive or through Go:
 
 ```sh
 rm -- "$HOME/.local/bin/nt"

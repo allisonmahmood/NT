@@ -52,8 +52,8 @@ publication is running.
   with hashes of the verified published inputs; regenerate both `.SRCINFO` files.
   Build both recipes from fresh downloads with `makepkg`, inspect with `namcap`,
   and confirm `nt --version`. Keep #34 open until these checks pass.
-- Ensure Arch CI builds the published source once its checksum is pinned; a
-  synthetic HEAD archive cannot use the published source hash.
+- Arch CI exercises HEAD with a temporary recipe and its own computed checksum;
+  separately test the unmodified release recipes against published downloads.
 - Exercise create, cd, home, completion, dirty-worktree refusal, and removal
   through the installed shell hook. Confirm update and removal instructions.
 - Verify GitHub has no unresolved dependency, code-scanning or secret-scanning
