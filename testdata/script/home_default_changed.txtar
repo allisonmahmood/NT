@@ -1,0 +1,35 @@
+env NT_NO_FETCH=
+exec git init -q --bare -b main origin
+exec git clone -q origin repo
+cd repo
+exec git commit -q --allow-empty -m initial
+exec git push -q origin main
+exec nt home
+cd ..
+exec git clone -q origin publisher
+cd publisher
+exec git checkout -b release/v2
+exec git commit -q --allow-empty -m new-default
+exec git push -q origin release/v2
+exec git checkout main
+exec git commit -q --allow-empty -m old-default
+exec git push -q origin main
+exec git -C ../origin symbolic-ref HEAD refs/heads/release/v2
+cd ../repo
+
+# Fetch must not silently treat a cached origin/HEAD as the remote's current
+# default. Plain git may intentionally leave that symbolic ref unchanged.
+exec git config remote.origin.followRemoteHEAD never
+exec nt home
+stdout 'checkout is not on release/v2'
+exec git log -1 --format=%s
+stdout 'initial'
+exec nt task
+exec git -C ../repo.worktrees/task log -1 --format=%s
+stdout 'new-default'
+
+# Discovery also works when there is no cached remote HEAD at all.
+exec git symbolic-ref --delete refs/remotes/origin/HEAD
+exec git checkout -b release/v2 origin/release/v2
+exec nt home
+stdout 'home is current'

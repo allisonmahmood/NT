@@ -31,7 +31,11 @@ func LockMutation(dir string) (func(), error) {
 // CheckIdle refuses operations and index states whose work cannot safely be
 // interpreted as an ordinary checkout. Query failures always fail closed.
 func CheckIdle(dir string) error {
-	for _, name := range []string{"MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "BISECT_LOG", "rebase-merge", "rebase-apply", "sequencer", "index.lock"} {
+	paths := []string{"MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "BISECT_LOG", "rebase-merge", "rebase-apply", "sequencer", "index.lock", "HEAD.lock", "ORIG_HEAD.lock", "packed-refs.lock", "reftable/tables.list.lock"}
+	if ref, ok := git.Query(dir, "symbolic-ref", "--quiet", "HEAD"); ok {
+		paths = append(paths, ref+".lock")
+	}
+	for _, name := range paths {
 		path, ok := git.Query(dir, "rev-parse", "--path-format=absolute", "--git-path", name)
 		if !ok {
 			return fmt.Errorf("cannot inspect Git operation state")

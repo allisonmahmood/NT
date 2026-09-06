@@ -72,7 +72,7 @@ func TestHomeMaintenanceAndVisits(t *testing.T) {
 }
 
 func TestHomeRefusals(t *testing.T) {
-	for _, scenario := range []string{"unstaged", "staged", "untracked", "diverged", "detached", "wrong-branch", "merge", "rebase", "bisect", "index-lock", "skip-worktree", "assume-unchanged", "corrupt-state", "ignored-collision", "opt-out", "invalid-config"} {
+	for _, scenario := range []string{"unstaged", "staged", "untracked", "diverged", "detached", "wrong-branch", "merge", "rebase", "bisect", "index-lock", "HEAD.lock", "ORIG_HEAD.lock", "refs/heads/main.lock", "packed-refs.lock", "skip-worktree", "assume-unchanged", "corrupt-state", "ignored-collision", "opt-out", "invalid-config"} {
 		t.Run(scenario, func(t *testing.T) {
 			dir, _, base, tip := homeFixture(t)
 			RefreshHome(dir, "origin", "main", base, HomeVisit)
@@ -101,6 +101,8 @@ func TestHomeRefusals(t *testing.T) {
 				writeFile(t, filepath.Join(dir, ".git", "BISECT_LOG"), "bisect")
 			case "index-lock":
 				writeFile(t, filepath.Join(dir, ".git", "index.lock"), "")
+			case "HEAD.lock", "ORIG_HEAD.lock", "refs/heads/main.lock", "packed-refs.lock":
+				writeFile(t, filepath.Join(dir, ".git", scenario), "")
 			case "skip-worktree", "assume-unchanged":
 				runGit(t, dir, "update-index", "--"+scenario, "README")
 				writeFile(t, filepath.Join(dir, "README"), "hidden changes")
@@ -117,7 +119,7 @@ func TestHomeRefusals(t *testing.T) {
 			}
 			before := runGit(t, dir, "rev-parse", "HEAD")
 			msg := RefreshHome(dir, "origin", "main", tip, HomeMaintenance)
-			if !strings.Contains(msg, "home left unchanged") {
+			if !strings.Contains(msg, "home left unchanged") && (scenario != "ignored-collision" || !strings.Contains(msg, "home refresh failed")) {
 				t.Fatal(msg)
 			}
 			if got := runGit(t, dir, "rev-parse", "HEAD"); got != before {
@@ -135,6 +137,28 @@ func TestHomeRefusals(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestHomePartialMergeFailureIsReportedHonestly(t *testing.T) {
+	dir, _, base, tip := homeFixture(t)
+	realGit, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	bin := t.TempDir()
+	writeFile(t, filepath.Join(bin, "git"), "#!/bin/sh\ncase \"$*\" in *'merge --ff-only'*) touch .git/refs/heads/main.lock;; esac\nexec \"$NT_TEST_REAL_GIT\" \"$@\"\n")
+	if err := os.Chmod(filepath.Join(bin, "git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("NT_TEST_REAL_GIT", realGit)
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	message := RefreshHome(dir, "origin", "main", tip, HomeVisit)
+	if strings.Contains(message, "left unchanged") || !strings.Contains(message, "inspect git status") {
+		t.Fatal("partial mutation was misreported:", message)
+	}
+	if runGit(t, dir, "rev-parse", "HEAD") != base || runGit(t, dir, "status", "--porcelain") == "" {
+		t.Fatal("fixture did not reproduce the partial update")
 	}
 }
 

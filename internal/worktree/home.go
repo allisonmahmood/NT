@@ -88,7 +88,7 @@ func refreshHome(dir, remote, branch, target string, action HomeAction) string {
 		return left("local commits, diverged history, or unreadable ancestry")
 	}
 	if head != target && !git.Run(dir, "-c", "core.hooksPath=/dev/null", "merge", "--ff-only", "--no-autostash", "--no-overwrite-ignore", "--no-edit", "--quiet", target) {
-		return left("fast-forward refused; resolve Git's diagnostic before retrying nt home")
+		return "home refresh failed; Git may have changed files or staging; inspect git status before retrying nt home"
 	}
 	// Do not record a baseline if another Git process moved the branch meanwhile.
 	actual, valid := git.Query(dir, "rev-parse", "HEAD")

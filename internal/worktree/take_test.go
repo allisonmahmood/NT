@@ -11,6 +11,12 @@ import (
 func takeFixture(t *testing.T) *Repo {
 	t.Helper()
 	dir := gitFixture(t)
+	// Git normalizes whitespace in stash messages; use the unique transfer ID.
+	spaced := filepath.Join(t.TempDir(), "repo with  two spaces")
+	if err := os.Rename(dir, spaced); err != nil {
+		t.Fatal(err)
+	}
+	dir = spaced
 	return &Repo{MainDir: dir, Root: filepath.Join(t.TempDir(), "trees"), Worktrees: []Worktree{{Path: dir, Branch: "main"}}}
 }
 
@@ -27,6 +33,9 @@ func TestTakePreservesWorkAndHistory(t *testing.T) {
 	unrelated := runGit(t, dir, "rev-parse", "refs/stash")
 	runGit(t, dir, "commit", "--allow-empty", "-qm", "local commit")
 	head := runGit(t, dir, "rev-parse", "HEAD")
+	// A remote branch with a different full name must not block a new task.
+	runGit(t, dir, "remote", "add", "team/upstream", t.TempDir())
+	runGit(t, dir, "update-ref", "refs/remotes/team/upstream/prefix/task", head)
 	writeFile(t, filepath.Join(dir, "README"), "staged\n")
 	runGit(t, dir, "add", "README")
 	writeFile(t, filepath.Join(dir, "README"), "staged\nworking\n")
@@ -73,7 +82,7 @@ func TestTakePreservesWorkAndHistory(t *testing.T) {
 }
 
 func TestTakeRefusesBeforeTouchingSource(t *testing.T) {
-	for _, scenario := range []string{"existing-branch", "existing-path", "intent-to-add", "submodule", "nested-repo", "nested-destination", "symlink-destination", "merge"} {
+	for _, scenario := range []string{"existing-branch", "existing-remote", "existing-path", "intent-to-add", "submodule", "nested-repo", "tracked-nested-repo", "bare-nested-repo", "nested-destination", "symlink-destination", "ignored-replacement", "merge"} {
 		t.Run(scenario, func(t *testing.T) {
 			r := takeFixture(t)
 			dir := r.MainDir
@@ -81,6 +90,9 @@ func TestTakeRefusesBeforeTouchingSource(t *testing.T) {
 			switch scenario {
 			case "existing-branch":
 				runGit(t, dir, "branch", "task")
+			case "existing-remote":
+				runGit(t, dir, "remote", "add", "team/upstream", t.TempDir())
+				runGit(t, dir, "update-ref", "refs/remotes/team/upstream/task", runGit(t, dir, "rev-parse", "HEAD"))
 			case "existing-path":
 				if err := os.MkdirAll(r.Dest("task"), 0o755); err != nil {
 					t.Fatal(err)
@@ -95,12 +107,25 @@ func TestTakeRefusesBeforeTouchingSource(t *testing.T) {
 				nested := filepath.Join(dir, "nested")
 				runGit(t, dir, "init", "-q", "-b", "main", nested)
 				runGit(t, nested, "commit", "--allow-empty", "-qm", "nested")
+			case "tracked-nested-repo":
+				nested := filepath.Join(dir, "nested")
+				if err := os.Mkdir(nested, 0o755); err != nil {
+					t.Fatal(err)
+				}
+				writeFile(t, filepath.Join(nested, "file"), "tracked by parent")
+				runGit(t, dir, "add", "nested/file")
+				runGit(t, dir, "init", "-q", "-b", "main", nested)
+			case "bare-nested-repo":
+				runGit(t, dir, "init", "-q", "--bare", "-b", "main", filepath.Join(dir, "bare"))
 			case "nested-destination":
 				r.Root = filepath.Join(dir, "trees")
 			case "symlink-destination":
 				if err := os.Symlink(dir, r.Root); err != nil {
 					t.Fatal(err)
 				}
+			case "ignored-replacement":
+				runGit(t, dir, "rm", "--cached", "README")
+				writeFile(t, filepath.Join(dir, ".git", "info", "exclude"), "README\n")
 			case "merge":
 				writeFile(t, filepath.Join(dir, ".git", "MERGE_HEAD"), runGit(t, dir, "rev-parse", "HEAD"))
 			}

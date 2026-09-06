@@ -29,9 +29,18 @@ func Take(r *Repo, source, branch string) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("cannot inspect existing branches")
 	}
+	remotes, ok := git.Query(source, "remote")
+	if !ok {
+		return "", fmt.Errorf("cannot inspect configured remotes")
+	}
 	for _, ref := range git.Lines(refs) {
-		if ref == "refs/heads/"+branch || strings.HasSuffix(ref, "/"+branch) {
+		if ref == "refs/heads/"+branch {
 			return "", fmt.Errorf("--take requires a new branch; %q already exists", branch)
+		}
+		for _, remote := range git.Lines(remotes) {
+			if ref == "refs/remotes/"+remote+"/"+branch {
+				return "", fmt.Errorf("--take requires a new branch; %q already exists on %s", branch, remote)
+			}
 		}
 	}
 	dest := r.Dest(branch)
@@ -89,7 +98,7 @@ func Take(r *Repo, source, branch string) (string, error) {
 	snapshot := ""
 	for _, line := range git.Lines(list) {
 		oid, subject, _ := strings.Cut(line, "\t")
-		if strings.Contains(subject, ": "+message) {
+		if strings.Contains(subject, ": "+name+" ") {
 			snapshot = oid
 			break
 		}
@@ -130,6 +139,58 @@ func checkTakeFiles(source string) error {
 		entry, err := os.Lstat(filepath.Join(source, name))
 		if err != nil || (!entry.Mode().IsRegular() && entry.Mode()&os.ModeSymlink == 0) {
 			return fmt.Errorf("untracked directory, nested repository, or special file %q needs manual handling", name)
+		}
+	}
+	tracked, ok := git.Query(source, "ls-files", "-z")
+	committed, valid := git.Query(source, "ls-tree", "-r", "--name-only", "-z", "HEAD")
+	if !ok || !valid {
+		return fmt.Errorf("cannot inspect tracked paths")
+	}
+	if err := checkNestedRepos(source, files+"\x00"+tracked+"\x00"+committed); err != nil {
+		return err
+	}
+	// Stash restores HEAD in the source. A staged deletion may have an ignored
+	// replacement at that path; leave that local environment file where it is.
+	deleted, ok := git.Query(source, "diff", "--cached", "--name-only", "--no-renames", "--diff-filter=D", "-z")
+	if !ok {
+		return fmt.Errorf("cannot inspect staged deletions")
+	}
+	if deleted != "" {
+		ignored, ok := git.Query(source, "ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z")
+		if !ok {
+			return fmt.Errorf("cannot inspect ignored replacements")
+		}
+		for _, path := range strings.Split(deleted, "\x00") {
+			for _, replacement := range strings.Split(ignored, "\x00") {
+				replacement = strings.TrimSuffix(replacement, "/")
+				if path != "" && replacement != "" && (within(path, replacement) || within(replacement, path)) {
+					return fmt.Errorf("ignored replacement at %q would be overwritten in the source; handle it manually", replacement)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// A nested repo can be invisible to git status when its files are tracked by
+// the parent. Inspect each containing directory once, including staged deletions.
+func checkNestedRepos(source, paths string) error {
+	seen := map[string]bool{".": true}
+	for _, path := range strings.Split(paths, "\x00") {
+		for dir := filepath.Dir(path); !seen[dir]; dir = filepath.Dir(dir) {
+			seen[dir] = true
+			candidate := filepath.Join(source, dir)
+			if _, err := os.Lstat(filepath.Join(candidate, ".git")); !os.IsNotExist(err) {
+				return fmt.Errorf("nested repository or unreadable metadata in %q needs manual handling", dir)
+			}
+			// Bare repositories have HEAD/objects instead of a .git entry.
+			if _, err := os.Lstat(filepath.Join(candidate, "HEAD")); err == nil {
+				if _, err := os.Lstat(filepath.Join(candidate, "objects")); !os.IsNotExist(err) {
+					return fmt.Errorf("possible nested bare repository in %q needs manual handling", dir)
+				}
+			} else if !os.IsNotExist(err) {
+				return fmt.Errorf("cannot inspect directory %q", dir)
+			}
 		}
 	}
 	return nil

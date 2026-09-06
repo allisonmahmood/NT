@@ -5,13 +5,12 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/allisonmahmood/nt/internal/git"
-	"github.com/allisonmahmood/nt/internal/shell"
-	"github.com/allisonmahmood/nt/internal/worktree"
-
 	"github.com/spf13/cobra"
 
+	"github.com/allisonmahmood/nt/internal/git"
+	"github.com/allisonmahmood/nt/internal/shell"
 	"github.com/allisonmahmood/nt/internal/ui"
+	"github.com/allisonmahmood/nt/internal/worktree"
 )
 
 // version is the binary version, set via SetVersion from main (ldflags).
