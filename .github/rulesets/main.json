@@ -60,23 +60,11 @@
             "integration_id": 15368
           },
           {
-            "context": "test (macos-latest, 1.27.0)",
-            "integration_id": 15368
-          },
-          {
-            "context": "test (macos-latest, 1.26.7)",
-            "integration_id": 15368
-          },
-          {
             "context": "parity (ubuntu-latest)",
             "integration_id": 15368
           },
           {
-            "context": "parity (macos-latest)",
-            "integration_id": 15368
-          },
-          {
-            "context": "build-snapshot",
+            "context": "build-snapshot / candidate",
             "integration_id": 15368
           }
         ],

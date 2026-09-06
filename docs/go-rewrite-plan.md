@@ -1,3 +1,8 @@
+> Release scope (September 2026): v0.1.0 ships Linux amd64/arm64 only.
+> macOS and Homebrew are deferred to #23 and #28. The original design below
+> preserves the macOS restoration context; it is not the current release checklist.
+> See `docs/releasing.md` for the current procedure.
+
 # `nt` Go rewrite — plan
 
 Goal: turn the single zsh plugin (`nt.plugin.zsh`, ~640 lines) into a cross-shell,

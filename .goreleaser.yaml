@@ -1,4 +1,4 @@
-# GoReleaser config for nt. Releases are cut later (see plan §5).
+# Linux release archives. macOS restoration is tracked in issue #23.
 # The first Go release is v0.1.0. CI uses a local v0.1.0-snapshot tag to
 # exercise changelog generation and packaging without publishing.
 version: 2
@@ -19,7 +19,6 @@ builds:
       - -s -w -X main.version={{.Version}}
     goos:
       - linux
-      - darwin
     goarch:
       - amd64
       - arm64
@@ -41,8 +40,8 @@ checksum:
 sboms:
   - artifacts: archive
 
-# release.yml attests and verifies the assets, then flips the draft to
-# published; immutability only applies once published.
+# Actions prepares a verified draft; scripts/publish-release.sh checks live
+# immutability with the maintainer login before publishing.
 release:
   draft: true
 
@@ -54,19 +53,3 @@ changelog:
       - "^docs:"
       - "^test:"
       - "^chore:"
-
-# --- Distribution (wired now, activated when the first tag is pushed) ---------
-# Uncomment once the tap repo + GH_PAT secret exist (plan §9.5):
-#
-# brews:
-#   - name: nt
-#     repository:
-#       owner: allisonmahmood
-#       name: homebrew-nt
-#     homepage: "https://github.com/allisonmahmood/nt"
-#     description: "Git worktrees, minus the ceremony"
-#     license: "MIT"
-#     install: |
-#       bin.install "nt"
-#     test: |
-#       system "#{bin}/nt", "--version"
