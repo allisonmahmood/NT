@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Verify cross-compiled metadata and execute the native release candidate.
+# Verify cross-compiled metadata, per-archive SBOMs, and execute the native release candidate.
 set -euo pipefail
 
-readonly dist_dir="dist"
-readonly expected_version="0.1.0-snapshot"
+readonly dist_dir="${2:-dist}"
+readonly expected_version="${1:-0.1.0-snapshot}"
 readonly checksum_file="$dist_dir/checksums.txt"
-readonly targets=(darwin_amd64 darwin_arm64 linux_amd64 linux_arm64)
+readonly targets=(linux_amd64 linux_arm64)
 readonly changelog_file="$dist_dir/CHANGELOG.md"
 
 if [[ ! -f "$checksum_file" ]]; then
@@ -33,6 +33,20 @@ for target in "${targets[@]}"; do
     exit 1
   fi
 
+  sbom="$archive.sbom.json"
+  if [[ ! -f "$sbom" ]]; then
+    echo "missing SBOM: $sbom" >&2
+    exit 1
+  fi
+  if ! grep -q '"spdxVersion"' "$sbom"; then
+    echo "SBOM is not SPDX JSON: $sbom" >&2
+    exit 1
+  fi
+  if ! grep -q "  $(basename "$sbom")\$" "$checksum_file"; then
+    echo "SBOM not listed in checksum manifest: $sbom" >&2
+    exit 1
+  fi
+
   target_dir="$extract_root/$target"
   mkdir "$target_dir"
   tar -xzf "$archive" -C "$target_dir"
@@ -50,7 +64,12 @@ for target in "${targets[@]}"; do
   fi
 done
 
-readonly reported_version="$("$extract_root/linux_amd64/nt" --version)"
+case "$(uname -m)" in
+  x86_64) native_target=linux_amd64 ;;
+  aarch64|arm64) native_target=linux_arm64 ;;
+  *) echo "unsupported verification host architecture" >&2; exit 1 ;;
+esac
+reported_version="$("$extract_root/$native_target/nt" --version)"
 if [[ "$reported_version" != "nt version $expected_version" ]]; then
   echo "binary reported unexpected version: $reported_version" >&2
   exit 1
