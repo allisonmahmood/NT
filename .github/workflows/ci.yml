@@ -34,7 +34,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest]
         go: ["1.27.0", "1.26.7"]
     runs-on: ${{ matrix.os }}
     steps:
@@ -48,18 +48,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: "1.27.0"
-      - name: Install zsh (ubuntu)
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y zsh
+      - name: Install supported shells
+        run: sudo apt-get update && sudo apt-get install -y zsh fish
       - name: Run the zsh parity oracle against the Go binary
         run: zsh test/parity/run.zsh
+      - name: Verify bash, zsh, and fish integration
+        run: test/shell-integration.sh
 
   arch-package:
     runs-on: ubuntu-latest
@@ -88,47 +89,16 @@ jobs:
           test "$(package-root/usr/bin/nt --version)" = "nt version ${PKGVER}"
 
   build-snapshot:
-    runs-on: ubuntu-latest
-    # id-token/attestations are only usable on the push-to-main run below;
-    # pull_request runs (no OIDC for forks) just build and verify artifacts.
+    uses: ./.github/workflows/candidate.yml
+    permissions:
+      contents: read
+
+  attest-snapshot:
+    if: github.event_name == 'push'
+    uses: ./.github/workflows/candidate.yml
+    with:
+      attest: true
     permissions:
       contents: read
       id-token: write
       attestations: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
-        with:
-          go-version: "1.27.0"
-      - name: Install syft (SBOM generator)
-        uses: anchore/sbom-action/download-syft@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
-        with:
-          syft-version: v1.51.1
-      - name: Create local snapshot tag
-        run: git tag --force v0.1.0-snapshot
-      - name: Build release candidate (no publish)
-        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7
-        with:
-          version: v2.18.0
-          args: release --clean --skip=publish
-        env:
-          GORELEASER_CURRENT_TAG: v0.1.0-snapshot
-      - name: Verify release candidate artifacts
-        run: test/release-candidate.sh
-      # Rehearse provenance without publishing anything: attest the snapshot
-      # artifacts and verify every subject, exactly as release.yml will.
-      - name: Attest release candidate artifacts
-        if: github.event_name == 'push'
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
-        with:
-          subject-path: |
-            dist/*.tar.gz
-            dist/*.sbom.json
-            dist/checksums.txt
-      - name: Verify release candidate attestations
-        if: github.event_name == 'push'
-        run: test/verify-attestations.sh
-        env:
-          GH_TOKEN: ${{ github.token }}

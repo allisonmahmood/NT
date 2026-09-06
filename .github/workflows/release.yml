@@ -1,7 +1,6 @@
 name: release
 
-# Authored now; fires only when a v* tag is pushed (plan §5 — releases come
-# later, once tested on real machines).
+# A signed version tag builds an attested draft. Publish with scripts/publish-release.sh.
 on:
   push:
     tags:
@@ -15,7 +14,7 @@ jobs:
   goreleaser:
     runs-on: ubuntu-latest
     permissions:
-      contents: write      # create the GitHub Release and upload assets
+      contents: write      # create a draft release and upload assets
       id-token: write      # OIDC token for Sigstore-backed build provenance
       attestations: write  # store attestations on the repo
     steps:
@@ -29,12 +28,6 @@ jobs:
         uses: anchore/sbom-action/download-syft@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
         with:
           syft-version: v1.51.1
-      # Refuse to publish unless the repo still has release immutability on
-      # (recorded in .github/immutable-releases.json).
-      - name: Check release immutability is enabled
-        run: gh api "repos/$GITHUB_REPOSITORY/immutable-releases" --jq .enabled | grep -qx true
-        env:
-          GH_TOKEN: ${{ github.token }}
       - name: goreleaser (draft release)
         uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7
         with:
@@ -42,8 +35,8 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # GH_PAT pushes the Homebrew tap once the tap repo + secret exist.
-          # GH_PAT: ${{ secrets.GH_PAT }}
+      - name: Verify release artifacts
+        run: test/release-candidate.sh "${GITHUB_REF_NAME#v}"
       # Sigstore keyless provenance via the workflow's OIDC identity (no
       # cosign/GPG keys). Verify with: gh attestation verify <file> --repo <repo>
       - name: Attest build provenance
@@ -57,9 +50,6 @@ jobs:
         run: test/verify-attestations.sh
         env:
           GH_TOKEN: ${{ github.token }}
-      # Only now does the release become public (and immutable); a failed
-      # attest/verify above leaves a draft the maintainer can delete.
-      - name: Publish release
-        run: gh release edit "$GITHUB_REF_NAME" --draft=false
-        env:
-          GH_TOKEN: ${{ github.token }}
+          GITHUB_WORKFLOW_PATH: .github/workflows/release.yml
+      # Publishing requires an admin-readable immutability check. Keep the
+      # release private until scripts/publish-release.sh runs with a maintainer login.
