@@ -55,11 +55,12 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: "1.27.0"
-      - name: Install zsh (ubuntu)
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y zsh
+      - name: Install supported shells
+        run: sudo apt-get update && sudo apt-get install -y zsh fish
       - name: Run the zsh parity oracle against the Go binary
         run: zsh test/parity/run.zsh
+      - name: Verify bash, zsh, and fish integration
+        run: test/shell-integration.sh
 
   build-snapshot:
     uses: ./.github/workflows/candidate.yml
