@@ -25,8 +25,9 @@ no scattering them across `/tmp`, no losing track of where they went:
 
 ## Install
 
-The first release will be **v0.1.0**. It is not published yet, so the pinned
-release commands below will work only after it is published.
+**[v0.1.0](https://github.com/allisonmahmood/NT/releases/tag/v0.1.0)** is available
+for Linux x86-64 and ARM64. Install a binary or local Arch package, then add your
+shell hook below.
 
 ### Go toolchain
 
@@ -38,7 +39,7 @@ GOBIN="$HOME/.local/bin" go install github.com/allisonmahmood/nt@v0.1.0
 go version -m "$HOME/.local/bin/nt" | grep 'mod.*github.com/allisonmahmood/nt.*v0.1.0'
 ```
 
-Until v0.1.0 is published, build the current source instead:
+To build the current development source instead:
 
 ```sh
 mkdir -p "$HOME/.local/bin" && git clone https://github.com/allisonmahmood/NT nt && cd nt && go build -o "$HOME/.local/bin/nt" .
@@ -61,8 +62,8 @@ makepkg -si
 nt --version
 ```
 
-These commands require the v0.1.0 release. Publishing both packages to the AUR
-is pending; until then, build them from these repository paths.
+AUR submission is pending; these repository-hosted packages can be built and
+installed locally now.
 
 ### Release archive
 

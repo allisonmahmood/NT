@@ -11,8 +11,7 @@ depends=('git')
 makedepends=('go')
 options=('!debug')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-# After v0.1.0 is published, replace SKIP with `makepkg -g` output and regenerate .SRCINFO.
-sha256sums=('SKIP')
+sha256sums=('f89a8ec231dad7a5df47e02d684302870d2e9999dcdfee31c02f6cc7a7c41d12')
 
 build() {
   cd "NT-$pkgver"

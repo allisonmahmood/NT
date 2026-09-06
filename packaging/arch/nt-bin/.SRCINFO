@@ -14,10 +14,10 @@ pkgbase = nt-bin
 	options = !strip
 	options = !debug
 	source = https://github.com/allisonmahmood/NT/releases/download/v0.1.0/checksums.txt
-	sha256sums = SKIP
+	sha256sums = a5ffa4a10cf5d4ab46f7b9507abff20bbe43f873ac81acddbdcfcd9efd7c625c
 	source_x86_64 = https://github.com/allisonmahmood/NT/releases/download/v0.1.0/nt_0.1.0_linux_amd64.tar.gz
-	sha256sums_x86_64 = SKIP
+	sha256sums_x86_64 = 51643c98285c437828bbde95dfe9e02749bcc64c12583c9471fc0f20e8425f8e
 	source_aarch64 = https://github.com/allisonmahmood/NT/releases/download/v0.1.0/nt_0.1.0_linux_arm64.tar.gz
-	sha256sums_aarch64 = SKIP
+	sha256sums_aarch64 = cfa27af781b59fd4a0a86d84c67410d75493a2b9fc91d82e479b2645e838c8bb
 
 pkgname = nt-bin
