@@ -60,6 +60,8 @@ func refreshHome(r *worktree.Repo, remote fetchedRemote, action worktree.HomeAct
 	if !remote.fetched || remote.commit == "" {
 		if action != worktree.HomeMaintenance {
 			info("home left unchanged: no freshly fetched default branch (offline, fetch disabled/failed, or no remote)")
+		} else if status, ok := git.Query(r.MainDir, "status", "--porcelain", "--untracked-files=all"); ok && status != "" {
+			info("home has uncommitted changes; use nt <new-name> --take to take them into a worktree")
 		}
 		return
 	}

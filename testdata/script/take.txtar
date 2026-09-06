@@ -6,6 +6,11 @@ exec git commit -qm initial
 cp ../dirty README
 env NT_CD_FILE=$WORK/cdf
 
+# Offline/no-remote creation still points dirty home toward an explicit take.
+exec nt independent
+stdout '--take'
+cmp README ../dirty
+
 # Invalid combinations must not disturb the source.
 ! exec nt task main --take
 cmp README ../dirty
@@ -24,7 +29,7 @@ cmp README ../dirty
 exec nt --help
 stdout '--take'
 exec nt __complete --take ''
-stdout 'main'
+! stdout '^main$'
 
 -- readme --
 initial
