@@ -12,6 +12,8 @@ else
   (cd "$repo_root" && go build -o "$fixture_root/bin/nt" .)
 fi
 export PATH="$fixture_root/bin:$PATH"
+unset NT_ROOT NT_REMOTE GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_INDEX_FILE
+unset GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_CONFIG_COUNT
 export NT_NO_FETCH=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null
 export GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@example.invalid
 export GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@example.invalid
