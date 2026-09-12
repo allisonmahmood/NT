@@ -1,13 +1,13 @@
 module github.com/allisonmahmood/nt
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/charmbracelet/fang v1.0.0
 	github.com/charmbracelet/huh v1.0.0
 	github.com/rogpeppe/go-internal v1.16.0
 	github.com/spf13/cobra v1.10.2
-	golang.org/x/sync v0.22.0
+	golang.org/x/sync v0.23.0
 	golang.org/x/term v0.45.0
 )
 
