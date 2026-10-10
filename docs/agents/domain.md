@@ -4,7 +4,7 @@ Engineering skills consume this repository's domain documentation before explori
 
 ## Before exploring
 
-- Read `CONTEXT.md` at the repository root when it exists.
+- Read `GLOSSARY.md` at the repository root when it exists.
 - Read relevant ADRs under `docs/adr/` when they exist.
 - If these files do not exist, proceed silently. Domain-modeling skills create them lazily when terminology or decisions are resolved.
 
@@ -12,7 +12,7 @@ Engineering skills consume this repository's domain documentation before explori
 
 This is a single-context repository:
 
-- `CONTEXT.md` contains the project glossary and domain model.
+- `GLOSSARY.md` contains the project glossary and domain model.
 - `docs/adr/` contains repository-wide architectural decisions.
 
 ## Consumer rules
